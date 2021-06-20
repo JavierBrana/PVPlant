@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8" />
+    
+    <!-- Load Leaflet from CDN -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.4.0/dist/leaflet.css"
+    integrity="sha512-puBpdR0798OZvTTbP4A8Ix/l+A4dHDD0DGqYW6RQ+9jxkRFclaxxQb/SJAWZfWAkuyeQUytO7+7N4QKrDh+drA=="
+    crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.4.0/dist/leaflet.js"
+    integrity="sha512-QVftwZFqvtRNi0ZyCtsznlKSWOStnDORoefr1enyq5mVL4tmKB3S/EnC3rRJcxCPavG10IcrVGSmPh6Qw5lwrg=="
+    crossorigin=""></script>
+
+
+    <!-- Load Esri Leaflet from CDN -->
+    <script src="https://unpkg.com/esri-leaflet@2.2.4/dist/esri-leaflet.js"
+    integrity="sha512-tyPum7h2h36X52O2gz+Pe8z/3l+Y9S1yEUscbVs5r5aEY5dFmP1WWRY/WLLElnFHa+k1JBQZSCDGwEAnm2IxAQ=="
+    crossorigin=""></script>
+
+
+  <!-- Load Esri Leaflet Geocoder from CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/esri-leaflet-geocoder@2.2.14/dist/esri-leaflet-geocoder.css"
+    integrity="sha512-v5YmWLm8KqAAmg5808pETiccEohtt8rPVMGQ1jA6jqkWVydV5Cuz3nJ9fQ7ittSxvuqsvI9RSGfVoKPaAJZ/AQ=="
+    crossorigin="">
+  <script src="https://unpkg.com/esri-leaflet-geocoder@2.2.14/dist/esri-leaflet-geocoder.js"
+    integrity="sha512-uK5jVwR81KVTGe8KpJa1QIN4n60TsSV8+DPbL5wWlYQvb0/nYNgSOg9dZG6ViQhwx/gaMszuWllTemL+K+IXjg=="
+    crossorigin=""></script>
+    
+    <link rel="stylesheet" href="https://rawgit.com/Leaflet/Leaflet.draw/leaflet-master/dist/leaflet.draw.css">
+    <script src="https://rawgit.com/Leaflet/Leaflet.draw/leaflet-master/dist/leaflet.draw-src.js"></script>
+	<!--script src='//api.tiles.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.3.1/leaflet-omnivore.min.js'></script-->
+	
+	<script src='https://api.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.2.0/leaflet-omnivore.min.js'></script>
+	
+	<script type="text/javascript" src="./qwebchannel.js"></script>  
+	
+    <style>
+        body { padding: 0; margin: 0; }
+        html, body, #map { height: 100%; }
+		#delete, #export {
+            position: absolute;
+            top:50px;
+            right:10px;
+            z-index:100;
+            background:white;
+            color:black;
+            padding:6px;
+            border-radius:4px;
+            font-family: 'Helvetica Neue';
+            cursor: pointer;
+            font-size:12px;
+            text-decoration:none;
+        }
+        #export {
+            top:90px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id='delete'>Delete Features</div>
+    <a href='#' id='export'>Export Features</a>	
+	
+	<script>
+	var OpenStreetMap_Mapnik = L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+	  attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+	});
+
+	var googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{
+		subdomains:['mt0','mt1','mt2','mt3']
+	});
+
+	var googleHybrid = L.tileLayer('http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',{
+		maxZoom: 20,
+		subdomains:['mt0','mt1','mt2','mt3']
+	});
+
+	var map = L.map('map', {
+		center: [0,0],
+		zoom: 0,
+		layers: [OpenStreetMap_Mapnik, googleSat, googleHybrid]
+		});
+
+	var baseMaps = {
+		"OSM": OpenStreetMap_Mapnik,
+		"Satilite": googleSat,
+		"Hybrid": googleHybrid
+	};
+	L.control.layers(baseMaps).addTo(map);
+	L.control.scale().addTo(map);
+  
+	var drawnItems = new L.FeatureGroup().addTo(map);
+	var drawControl = new L.Control.Draw({
+	  draw: {
+		position: 'topleft',
+		polygon: {
+		  allowIntersection: false,
+		  drawError: {
+			color: '#b00b00',
+			timeout: 1000
+		  },
+		  showArea: true
+		},
+		circle: {
+		  shapeOptions: {
+			color: '#662d91'
+		  }
+		},
+		polyline: true,
+		rectangle: true,
+		marker: true,
+	  },
+	  edit: {
+		featureGroup: drawnItems
+	  }
+	});
+	map.addControl(drawControl);
+
+	map.on('draw:created', function(e) {
+	  drawnItems.addLayer(e.layer);
+
+	});
+
+	// on click, clear all layers
+	document.getElementById('delete').onclick = function(e) {
+		drawnItems.clearLayers();
+	}
+
+	document.getElementById('export').onclick = function(e) {
+		// Extract GeoJson from featureGroup
+		var data = drawnItems.toGeoJSON();
+
+		// Stringify the GeoJson
+		var convertedData = 'text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(data));
+		
+		// Create export
+		console.log(convertedData);
+		document.getElementById('export').setAttribute('href', 'data:' + convertedData);
+		document.getElementById('export').setAttribute('download','data.geojson');
+	}
+		
+	var runLayer = omnivore
+	  .kml("https://storage.googleapis.com/cfb-documents/cityscape-4.kml")
+	  .on("ready", function(event) {
+		console.clear();
+		map.fitBounds(event.target.getBounds());
+		console.log(event.target.getBounds());
+	  })
+	  .addTo(drawnItems);
+
+</script>
+
+</body>
+</html>
