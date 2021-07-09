@@ -23,7 +23,7 @@ else:
         return txt
     # \endcond
 
-__title__ = "PVPlant Trench"
+__title__ = "PVPlant Road"
 __author__ = "Javier Braña"
 __url__ = "http://www.sogos-solar.com"
 
@@ -31,22 +31,22 @@ import PVPlantResources
 from PVPlantResources import DirIcons as DirIcons
 
 
-def makeTrench(base=None):
-    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Trench")
-    _Trench(obj)
-    _ViewProviderTrench(obj.ViewObject)
+def makeRoad(base=None):
+    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Road")
+    _Road(obj)
+    _ViewProviderRoad(obj.ViewObject)
     obj.Base = base
     FreeCAD.ActiveDocument.recompute()
     return obj
 
 
-class _Trench(ArchComponent.Component):
+class _Road(ArchComponent.Component):
     def __init__(self, obj):
         # Definición de Variables:
         ArchComponent.Component.__init__(self, obj)
         self.obj = obj
         self.setProperties(obj)
-        self.Type = "Trench"
+        self.Type = "Road"
         obj.Proxy = self
 
         self.route = False
@@ -139,20 +139,35 @@ class _Trench(ArchComponent.Component):
         'Sketcher::PropertyConstraintList'
         ]'''
 
+        obj.addProperty("App::PropertyPercent",
+                        "SurfaceSlope",
+                        "Road",
+                        QT_TRANSLATE_NOOP("App::Property", "Connection")).SurfaceSlope = 2
+
+        obj.addProperty("App::PropertyPercent",
+                        "SurfaceDrainSlope",
+                        "Road",
+                        QT_TRANSLATE_NOOP("App::Property", "Connection")).SurfaceDrainSlope = int(3 / 2 * 100)
+
+        obj.addProperty("App::PropertyPercent",
+                        "SubbaseDrainSlope",
+                        "Road",
+                        QT_TRANSLATE_NOOP("App::Property", "Connection")).SubbaseDrainSlope = int(2 / 3 * 100)
+
         obj.addProperty("App::PropertyLength",
                         "Width",
-                        "Trench",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Width = 300
+                        "Road",
+                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Width = 4000
 
         obj.addProperty("App::PropertyLength",
                         "Height",
-                        "Trench",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Height = 700
+                        "Road",
+                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Height = 250
 
         obj.addProperty("App::PropertyLength",
-                        "Sand_Height",
-                        "Trench",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Sand_Height = 400
+                        "Subbase",
+                        "Road",
+                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Subbase = 400
 
     def onDocumentRestored(self, obj):
         """Method run when the document is restored.
@@ -160,109 +175,48 @@ class _Trench(ArchComponent.Component):
 
         ArchComponent.Component.onDocumentRestored(self, obj)
         self.obj = obj
-        self.Type = "Trench"
+        self.Type = "Road"
         obj.Proxy = self
 
     def execute(self, obj):
         import Part, DraftGeomUtils, math
         import Draft
 
-        self.count += 1
-        print("         ########     Trench - execute: ", self.count)
-
-        w = None
         w = obj.Base.Shape
-        land = FreeCAD.ActiveDocument.Shape
-        w = land.Shape.makeParallelProjection(obj.Base.Shape, FreeCAD.Vector(0, 0, 1))
-        po = []
-        for ver in w.Vertexes:
-            po.append(ver.Point)
-        #w = w.Wires[0]
-        w = Draft.makeWire(po)
-        FreeCAD.ActiveDocument.recompute()
+        profiles = []
 
+        SurfaceDrainSlope = obj.SurfaceDrainSlope / 100
+        SubbaseDrainSlope = obj.SubbaseDrainSlope / 100
 
-        vec_down_left = FreeCAD.Vector(-obj.Width.Value / 2, 0, -obj.Height.Value)
-        vec_down_right = FreeCAD.Vector(obj.Width.Value / 2, 0, -obj.Height.Value)
         vec_up_left = FreeCAD.Vector(-obj.Width.Value / 2, 0, 0)
+        vec_up_center = FreeCAD.Vector(0, 0, obj.SurfaceSlope * obj.Width.Value / 200)
         vec_up_right = FreeCAD.Vector(obj.Width.Value / 2, 0, 0)
-        vec_sand_left = FreeCAD.Vector(-obj.Width.Value / 2, 0, -obj.Height.Value + obj.Sand_Height.Value)
-        vec_sand_right = FreeCAD.Vector(obj.Width.Value / 2, 0, -obj.Height.Value + obj.Sand_Height.Value)
+
+        vec_down_left = FreeCAD.Vector(-(obj.Width.Value / 2 + obj.Height.Value / SurfaceDrainSlope), 0, -obj.Height.Value)
+        vec_down_right = FreeCAD.Vector((obj.Width.Value / 2 + obj.Height.Value / SurfaceDrainSlope), 0, -obj.Height.Value)
+
+        vec_sand_left = FreeCAD.Vector(-(obj.Width.Value / 2 + obj.Height.Value *  (1 / SurfaceDrainSlope + SubbaseDrainSlope)), 0, -obj.Height.Value - obj.Subbase.Value)
+        vec_sand_right = FreeCAD.Vector((obj.Width.Value / 2 + obj.Height.Value *  (1 / SurfaceDrainSlope + SubbaseDrainSlope)), 0, -obj.Height.Value - obj.Subbase.Value)
 
         edge1 = Part.makeLine(vec_down_left, vec_down_right)
         edge2 = Part.makeLine(vec_down_right, vec_up_right)
-        edge3 = Part.makeLine(vec_up_right, vec_up_left)
-        edge4 = Part.makeLine(vec_up_left, vec_down_left)
-        p = Part.Wire([edge1, edge2, edge3, edge4])
+        edge3 = Part.makeLine(vec_up_right, vec_up_center)
+        edge4 = Part.makeLine(vec_up_center, vec_up_left)
+        edge5 = Part.makeLine(vec_up_left, vec_down_left)
 
-        # 1. Perfil original del cual salen todos los demás:
-        #p = Part.makePolygon([vec_down_left, vec_down_right, vec_up_right])
+        edge6 = Part.makeLine(vec_sand_left, vec_sand_right)
+        edge7 = Part.makeLine(vec_sand_left, vec_down_left)
+        edge8 = Part.makeLine(vec_sand_right, vec_down_right)
+
+        p = Part.Wire([edge1, edge2, edge3, edge4, edge5])
+        profiles.append(p)
+
+        p = Part.Wire([edge6, edge8, edge1, edge7])
+        profiles.append(p)
 
         shapes = []
-        usenew = False
+        for p in profiles:
 
-        if usenew:
-            profiles = []
-            c = p.CenterOfMass #(vec_up_right + vec_up_left) / 2
-            for ed in w.Edges:
-                p1 = p.copy()
-                delta = ed.CenterOfMass - c
-                p1.translate(delta)
-
-                if Draft.getType(obj.Base) == "BezCurve":
-                    v1 = obj.Base.Placement.multVec(obj.Base.Points[1]) - w.Vertexes[0].Point
-                else:
-                    v1 = ed.Vertexes[1].Point - ed.Vertexes[0].Point
-
-                v2 = DraftGeomUtils.getNormal(p1)
-                rot = FreeCAD.Rotation(v2, v1)
-                print (" +++++ rot: ", rot.toEuler())
-                #p1.rotate(ed.CenterOfMass, rot.Axis, math.degrees(rot.Angle))
-                p1.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), rot.toEuler()[0])
-
-                profiles.append(p1)
-                Part.show(p1, "Perfil")
-
-            for ind in range(len(w.Edges) - 1):
-                e1 = w.Edges[ind]
-                e2 = w.Edges[ind + 1]
-
-                vec1 = e1.Vertexes[1].Point - e1.Vertexes[0].Point
-                vec1.normalize()
-                vec2 = e2.Vertexes[1].Point - e2.Vertexes[0].Point
-                vec2.normalize()
-                vec3 = vec1.add(vec2)
-                plane = Part.Plane(e1.Vertexes[1].Point, vec3)
-                plane = Part.makePlane(10000,10000, e1.Vertexes[1].Point, vec3)
-                plane.translate(e1.Vertexes[1].Point - plane.CenterOfMass)
-                Part.show(plane)
-
-                myWiresOut3 = []
-                for w in p.Wires:
-                    newWire = plane.makeParallelProjection(w, vec1)
-                    myWiresOut3.append(newWire)
-                print(myWiresOut3)
-                Part.show(myWiresOut3)
-                #f_new = Part.Wire(myWiresOut3)
-                #Part.show(f_new)
-
-                profiles.append(p1)
-                Part.show(p1, "Perfil")
-
-
-            if p.Faces:
-                for f in p.Faces:
-                    sh = w.makePipeShell([f.OuterWire], True, False, 2)
-                    for shw in f.Wires:
-                        if shw.hashCode() != f.OuterWire.hashCode():
-                            sh2 = w.makePipeShell([shw], True, False, 2)
-                            sh = sh.cut(sh2)
-                    shapes.append(sh)
-            elif p.Wires:
-                for pw in p.Wires:
-                    sh = w.makePipeShell(profiles, True, False, 2)
-                    shapes.append(sh)
-        else:
             if hasattr(p, "CenterOfMass"):
                 c = p.CenterOfMass
             else:
@@ -282,7 +236,6 @@ class _Trench(ArchComponent.Component):
             ang = rot.toEuler()[0]
             p.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), ang)
 
-            Part.show(p, "UN_Perfil")
 
             if p.Faces:
                 for f in p.Faces:
@@ -294,31 +247,35 @@ class _Trench(ArchComponent.Component):
                     shapes.append(sh)
             elif p.Wires:
                 for pw in p.Wires:
-                    sh = w.makePipeShell([pw], True, False, 1)
+                    sh = w.makePipeShell([pw], True, False, 2)
                     shapes.append(sh)
 
         obj.Shape = Part.makeCompound(shapes)
 
+    def makeLoft(self, profile):
+        return
 
-class _ViewProviderTrench(ArchComponent.ViewProviderComponent):
+
+
+class _ViewProviderRoad(ArchComponent.ViewProviderComponent):
     def __init__(self, vobj):
         ArchComponent.ViewProviderComponent.__init__(self, vobj)
 
     def getIcon(self):
-        return str(os.path.join(PVPlantResources.DirIcons, "trench.svg"))
+        return str(os.path.join(PVPlantResources.DirIcons, "Road.svg"))
 
-class _TrenchTaskPanel:
+class _RoadTaskPanel:
 
     def __init__(self, obj=None):
 
         if obj is None:
             self.new = True
-            self.obj = makeTrench()
+            self.obj = makeRoad()
         else:
             self.new = False
             self.obj = obj
 
-        self.form = FreeCADGui.PySideUic.loadUi(os.path.join(PVPlantResources.__dir__, "PVPlantTrench.ui"))
+        self.form = FreeCADGui.PySideUic.loadUi(os.path.join(PVPlantResources.__dir__, "PVPlantRoad.ui"))
 
     def accept(self):
         FreeCADGui.Control.closeDialog()
@@ -347,25 +304,25 @@ from draftutils.messages import _msg, _err
 from draftutils.translate import translate
 
 
-class _CommandTrench(gui_base_original.Creator):
+class _CommandRoad(gui_base_original.Creator):
     """Gui command for the Line tool."""
 
     def __init__(self):
-        # super(_CommandTrench, self).__init__()
+        # super(_CommandRoad, self).__init__()
         gui_base_original.Creator.__init__(self)
         self.path = None
 
     def GetResources(self):
         """Set icon, menu and tooltip."""
-        return {'Pixmap': str(os.path.join(DirIcons, "trench.svg")),
-                'MenuText': QtCore.QT_TRANSLATE_NOOP("PVPlantTrench", "Trench"),
+        return {'Pixmap': str(os.path.join(DirIcons, "Road.svg")),
+                'MenuText': QtCore.QT_TRANSLATE_NOOP("PVPlantRoad", "Road"),
                 'Accel': "C, T",
-                'ToolTip': QtCore.QT_TRANSLATE_NOOP("PVPlantTrench",
-                                                    "Creates a Trench object from setup dialog.")}
+                'ToolTip': QtCore.QT_TRANSLATE_NOOP("PVPlantRoad",
+                                                    "Creates a Road object from setup dialog.")}
 
     def Activated(self, name=translate("draft", "Line")):
         """Execute when the command is called."""
-        # super(_CommandTrench, self).Activated(name)
+        # super(_CommandRoad, self).Activated(name)
         gui_base_original.Creator.Activated(self, name=translate("draft", "Line"))
 
         if not self.doc:
@@ -392,7 +349,7 @@ class _CommandTrench(gui_base_original.Creator):
 
         if not done:
             self.ui.wireUi(name)
-            self.ui.setTitle("Trench")
+            self.ui.setTitle("Road")
             self.obj = self.doc.addObject("Part::Feature", self.featureName)
             gui_utils.format_object(self.obj)
 
@@ -506,15 +463,15 @@ class _CommandTrench(gui_base_original.Creator):
                 import Draft
                 self.path = Draft.makeWire(self.node, closed=False, face=False)
 
-        # super(_CommandTrench, self).finish()
+        # super(_CommandRoad, self).finish()
         gui_base_original.Creator.finish(self)
         if self.ui and self.ui.continueMode:
             self.Activated()
 
-        self.makeTrench()
+        self.makeRoad()
 
-    def makeTrench(self):
-        makeTrench(self.path)
+    def makeRoad(self):
+        makeRoad(self.path)
 
     def removeTemporaryObject(self):
         """Remove temporary object created."""
@@ -610,4 +567,4 @@ class _CommandTrench(gui_base_original.Creator):
 
 
 if FreeCAD.GuiUp:
-    FreeCADGui.addCommand('PVPlantTrench', _CommandTrench())
+    FreeCADGui.addCommand('PVPlantRoad', _CommandRoad())

@@ -28,7 +28,8 @@ class _CommandReload:
             PVPlantGeoreferencing, PVPlantImportGrid, PVPlantTerrainAnalisys, \
             PVPlantSite, PVPlantRack, PVPlantFence, PVPlantCreateTerrainMesh, \
             PVPlantProyectToMesh, PVPlantFoundation, PVPlantTreeGenerator, exportPVSyst, \
-            PVPlantTrench, PVPEarthWorks, PVPlantBOQFrames, PVPlantStringBox, PVPlantCable, PVPlantPlatform
+            PVPlantTrench, PVPEarthWorks, PVPlantBOQFrames, PVPlantStringBox, PVPlantCable, PVPlantPlatform, \
+            PVPlantRoad
         #from  Lib import GoogleMapDownloader
 
         import importlib
@@ -50,6 +51,7 @@ class _CommandReload:
         importlib.reload(PVPlantStringBox)
         importlib.reload(PVPlantCable)
         importlib.reload(PVPlantPlatform)
+        importlib.reload(PVPlantRoad)
 
 
         #importlib.reload(GoogleMapDownloader)

@@ -16,13 +16,12 @@ class PVPlantWorkbench (Workbench):
 
     def Initialize(self):
 
-
         # Mias
         import PVPlantGeoreferencing,  PVPlantRack, PVPlantPlacement, \
             PVPlant_Import, PVPlantTerrainAnalisys, PVPlantSite, PVPlantImportGrid,PVPlantFence,\
             PVPlantProyectToMesh, PVPlantFoundation, PVPlantCreateTerrainMesh, \
             PVPlantTreeGenerator, exportPVSyst, PVPlantTrench, PVPEarthWorks, PVPlantBOQFrames, \
-            PVPlantStringBox, PVPlantCable, PVPlantPlatform,  \
+            PVPlantStringBox, PVPlantCable, PVPlantPlatform,  PVPlantRoad, \
             reload
 
         # A list of command names created in the line above
@@ -37,6 +36,7 @@ class PVPlantWorkbench (Workbench):
                      "PVPlantTrench",
                      "PVPlantEarthworks",
                      "PVPlantPlatform",
+                     "PVPlantRoad",
                      ]
         self.list1 = [#"PVPlantFence",
                      "PVPlantFenceGroup",

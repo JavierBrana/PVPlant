@@ -45,17 +45,15 @@ class _Platform(ArchComponent.Component):
         # Definición de Variables:
         ArchComponent.Component.__init__(self, obj)
         self.obj = obj
+        self.base = None
+
         self.setProperties(obj)
-        self.Type = "Trench"
+        self.Type = "Pad"
+
         obj.Proxy = self
-
-        self.route = False
-
         obj.IfcType = "Civil Element"  ## puede ser: Cable Carrier Segment
         obj.setEditorMode("IfcType", 1)
 
-
-        self.count = 0
 
     def setProperties(self, obj):
         # Definicion de Propiedades:
@@ -139,26 +137,29 @@ class _Platform(ArchComponent.Component):
         'Sketcher::PropertyConstraintList'
         ]'''
 
+
+        #TODO: Los parametros width y length desaparecerán. Se tiene que selecionar objeto base
+        ##if not obj.Base:
         obj.addProperty("App::PropertyLength",
                         "Width",
                         "Platform",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Width = 10000
-
-        obj.addProperty("App::PropertyLength",
-                        "Height",
-                        "Platform",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Height = 2000
+                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Width = 5000
 
         obj.addProperty("App::PropertyLength",
                         "Length",
                         "Platform",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Length = 4000
+                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Length = 10000
+
 
         obj.addProperty("App::PropertyAngle",
-                        "Slope",
+                        "EmbankmentSlope",
                         "Platform",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Slope = 45
+                        QT_TRANSLATE_NOOP("App::Property", "Connection")).EmbankmentSlope = 25.00
 
+        obj.addProperty("App::PropertyAngle",
+                        "CutSlope",
+                        "Platform",
+                        QT_TRANSLATE_NOOP("App::Property", "Connection")).CutSlope = 60.00
 
     def onDocumentRestored(self, obj):
         """Method run when the document is restored.
@@ -169,24 +170,152 @@ class _Platform(ArchComponent.Component):
         self.Type = "Trench"
         obj.Proxy = self
 
+    def onChanged(self, fp, prop):
+        '''Do something when a property has changed'''
+
+
+        '''
+        self.changed = True
+
+        if prop in ["MaxPhi", "MinPhi", ]:
+            self.changed = False
+
+        if prop == "Tilt":
+            if not hasattr(self, "obj"):
+                return
+            if hasattr(self.obj, "MaxPhi"):
+                if self.obj.Tilt > self.obj.MaxPhi:
+                    self.obj.Tilt = self.obj.MaxPhi
+
+                if self.obj.Tilt < self.obj.MinPhi:
+                    self.obj.Tilt = self.obj.MinPhi
+
+            compound = self.obj.Shape.SubShapes[0]
+            compound.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 45)
+            # a = compound.rotate(base, FreeCAD.Vector(1, 0, 0), obj.Tilt)
+            self.changed = True
+        '''
+
+
     def execute(self, obj):
-        import Part, DraftGeomUtils, math
+        import Part, DraftGeomUtils
         import Draft
+        import math
 
-        # De momento se hace con una cuña:
-        #'makeshape(xmin, ymin, zmin, z2min, x2min, xmax, ymax, zmax, z2max, x2max,[pnt,dir])\n
-        # -- Make a shape located in pnt\nBy default pnt=Vector(0,0,0) and dir=Vector(0,0,1)'
+        pl = obj.Placement.Base
+        shapes = []
+        base = None
 
-        # 1. se crea la cuña 0 extrusión con 
-        shape = Part.makeWedge()
+        # Inicialmente hacemos una base rectangular:
+        # TODO: que valga cualquier tipo de forma. Se debe seleccionar una base
+        if obj.Base:
+            base = obj.Base
+        else:
+            halfWidth = obj.Width.Value / 2
+            halfLength = obj.Length.Value / 2
 
-        # 2. se crea el bisel
-        shape = shape.makeFillet(3, 0, [shape.Shape.Edge2, shape.Shape.Edge4, shape.Shape.Edge6, shape.Shape.Edge8])
+            p1 = FreeCAD.Vector(-halfLength, -halfWidth, 0)
+            p2 = FreeCAD.Vector(halfLength, -halfWidth, 0)
+            p3 = FreeCAD.Vector(halfLength, halfWidth, 0)
+            p4 = FreeCAD.Vector(-halfLength, halfWidth, 0)
+            base = Part.makePolygon([p1, p2, p3, p4, p1])
 
+        # 1. Terraplén (embankment / fill):
+        fill = self.createSolid(obj, base, 0)
+        fill.Placement.Base += pl
+        fill = self.calculateFill(obj, fill)
 
+        # 2. Desmonte (cut):
+        cut = self.createSolid(obj, base, 1)
+        cut.Placement.Base += pl
+        cut = self.calculateCut(obj, cut)
 
+        if not fill and not cut:
+            shapes.append(Part.Face(base))
+        else:
+            if fill:
+                fill.Placement.Base -= pl
+                shapes.append(fill)
+            if cut:
+                cut.Placement.Base -= pl
+                shapes.append(cut)
 
         obj.Shape = Part.makeCompound(shapes)
+
+    def createSolid(self, obj, base, dir = 0):
+        import math
+        import BOPTools.SplitAPI as splitter
+
+        pl = obj.Placement.Base
+
+        zz = FreeCAD.ActiveDocument.Site.Terrain.Shape.BoundBox.ZMin if dir == 0 \
+            else FreeCAD.ActiveDocument.Site.Terrain.Shape.BoundBox.ZMax
+        height = abs(zz - pl.z)
+        angle = obj.EmbankmentSlope.Value if dir == 0 else obj.CutSlope.Value
+
+        offset = base.Wires[0].makeOffset2D(height / math.tan(math.radians(angle)), join=0)
+        offset.Placement.Base.z = zz
+
+        offset1 = base.Wires[0].makeOffset2D(10 / math.tan(math.radians(angle)), join=0)
+        offset1.Placement.Base.z = pl.z + (-10) if dir == 0 else 10
+
+        offset2 = base.Wires[0].makeOffset2D(20 / math.tan(math.radians(angle)), join=0)
+        offset2.Placement.Base.z = pl.z + (-20) if dir == 0 else 20
+
+        solid = None
+        if True:
+            solid = Part.makeLoft([base, offset1, offset2, offset], True)
+        else:
+            faces = []
+            faces.append(Part.Face(base))
+            faces.append(Part.Face(offset))
+            count = -1
+            lines = []
+            for vertex in base.Vertexes:
+                for i in range(2):
+                    lines.append(Part.LineSegment(vertex.Point, offset.Vertexes[count].Point))
+                    count += 1
+
+            count = -1
+            count1 = 0
+            for i in range(len(lines)):
+                if i % 2 == 0:
+                    line = lines[i].toShape()
+                    faces.append(line.revolve(line.Vertexes[0].Point, FreeCAD.Vector(0, 0, 1), 90))
+                else:
+                    faces.append(Part.makeLoft([base.Edges[count1], offset.Edges[count]]))
+                    count1 += 1
+                count += 1
+
+            solid = Part.makeSolid(Part.makeShell(Part.makeCompound(faces).Faces))
+
+        return solid
+
+    def calculateFill(self, obj, solid):
+        import BOPTools.SplitAPI as splitter
+
+        common = solid.common(FreeCAD.ActiveDocument.Site.Terrain.Shape)
+        if common.Area > 0:
+            sp = splitter.slice(solid, [common, ], "Split")
+            solid = sp.Solids[0] # TODO: Asegurarme que este es el SOLID que hay que coger
+            return solid
+
+        return None
+
+    def calculateCut(self, obj, solid):
+        import BOPTools.SplitAPI as splitter
+
+        common = solid.common(FreeCAD.ActiveDocument.Site.Terrain.Shape)
+        if common.Area > 0:
+            sp = splitter.slice(solid, [common, ], "Split")
+            sp = sp.Solids[0]
+            sp = sp.Shells[0]
+            sp = sp.cut(common)
+            #sp = sp.cut(solid.Faces[0])
+            shell = sp.cut(common)
+            if shell:
+                return  shell
+        return None
 
 
 class _ViewProviderPlatform(ArchComponent.ViewProviderComponent):
@@ -195,6 +324,9 @@ class _ViewProviderPlatform(ArchComponent.ViewProviderComponent):
 
     def getIcon(self):
         return str(os.path.join(PVPlantResources.DirIcons, "platform.svg"))
+
+
+
 
 class _PlatformTaskPanel:
 
@@ -254,6 +386,9 @@ class _CommandPlatform(gui_base_original.Creator):
 
     def Activated(self, name=translate("draft", "Line")):
         """Execute when the command is called."""
+        makePlatform()
+
+        return
         # super(_CommandTrench, self).Activated(name)
         gui_base_original.Creator.Activated(self, name=translate("draft", "Line"))
 
@@ -394,7 +529,7 @@ class _CommandPlatform(gui_base_original.Creator):
         if self.ui and self.ui.continueMode:
             self.Activated()
 
-        self.makeTrench()
+        self.makePlatform()
 
     def makePlatform(self):
         makePlatform(self.path)

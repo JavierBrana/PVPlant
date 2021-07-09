@@ -1042,8 +1042,8 @@ class _OrientationTaskPanel:
             print("No hay objetos para procesar")
             return False
 
-        from datetime import datetime
         import math
+        from datetime import datetime
         starttime = datetime.now()
 
         if self.obj.isDerivedFrom("Part::Feature"):
@@ -1068,9 +1068,9 @@ class _OrientationTaskPanel:
                 if angley >= 90:
                     anglex = 360.0 - anglex
 
-                anglex /= 2
-
-                colorlist.append((0.0, 0.0, anglex / 360.0 + .5))
+                #anglex /= 2
+                gray = anglex / 360.0
+                colorlist.append((gray, gray, gray))
                 continue
 
                 for rango in rangos:

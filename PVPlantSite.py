@@ -32,6 +32,8 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     from DraftTools import translate
     from PySide.QtCore import QT_TRANSLATE_NOOP
+    from pivy import coin
+
 else:
     # \cond
     def translate(ctxt,txt):
@@ -512,6 +514,13 @@ class Compass(object):
         return coords
 
 
+
+zone_list = ["Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7", "Z8", "Z9", "Z10", "Z11", "Z12",
+    "Z13", "Z14", "Z15", "Z16", "Z17", "Z18", "Z19", "Z20", "Z21", "Z22", "Z23", "Z24",
+    "Z25", "Z26", "Z27", "Z28", "Z29", "Z30", "Z31", "Z32", "Z33", "Z34", "Z35", "Z36",
+    "Z37", "Z38", "Z39", "Z40", "Z41", "Z42", "Z43", "Z44", "Z45", "Z46", "Z47", "Z48",
+    "Z49", "Z50", "Z51", "Z52", "Z53", "Z54", "Z55", "Z56", "Z57", "Z58", "Z59", "Z60"]
+
 class _PVPlantSite(ArchSite._Site):
 
     "The Site object"
@@ -519,15 +528,29 @@ class _PVPlantSite(ArchSite._Site):
     def __init__(self, obj):
         ArchSite._Site.__init__(self, obj)
 
-        obj.addProperty("App::PropertyLink", "Boundary", "Site",
-                        QT_TRANSLATE_NOOP("App::Property", "The base terrain of this site"))
-        obj.addProperty("App::PropertyLinkList", "Frames", "Site",
-                        QT_TRANSLATE_NOOP("App::Property", "The base terrain of this site"))
+        self.obj = obj
+
+        obj.addProperty("App::PropertyLink",
+                        "Boundary",
+                        "Site",
+                        "Boundary of land")
+
+        obj.addProperty("App::PropertyLinkList",
+                        "Frames",
+                        "Site",
+                        "Frames templates")
+
+        obj.addProperty("App::PropertyEnumeration",
+                        "UtmZone",
+                        "Base",
+                        "UTM zone").UtmZone = zone_list
+
+        obj.addProperty("App::PropertyVector",
+                        "Origin",
+                        "Base",
+                        "Origin point.").Origin = (0, 0, 0)
+
         self.Type = "PVPlatSite"
-
-        #obj.setEditorMode('Height',2)
-        #obj.ExtrusionVector = FreeCAD.Vector(0,0,-100000)
-
 
     def execute(self, obj):
 
@@ -587,9 +610,17 @@ class _PVPlantSite(ArchSite._Site):
                 self.execute(obj)
         '''
 
-        if prop == "Latitude" or prop == "Longitude":
-            import PVPlant.Lib.utm
-            print ("coordinates")
+        node = self.get_geoorigin()
+
+        if prop == "UtmZone":
+            zone = obj.getPropertyByName("UtmZone")
+            geo_system = ["UTM", zone, "FLAT"]
+            node.geoSystem.setValues(geo_system)
+
+        if prop == "Origin":
+            origin = obj.getPropertyByName("Origin")
+            node.geoCoords.setValue(origin.x, origin.y, 0)
+
 
     def computeAreas(self,obj):
         ArchSite._Site.computeAreas(self, obj)
@@ -658,6 +689,26 @@ class _PVPlantSite(ArchSite._Site):
             obj.SubtractionVolume = subvol
         if obj.AdditionVolume.Value != addvol:
             obj.AdditionVolume = addvol
+
+
+
+
+    # Nuevo hecho por mí:
+    def get_geoorigin(self):
+        sg = FreeCADGui.ActiveDocument.ActiveView.getSceneGraph()
+        node = sg.getChild(0)
+
+        if not isinstance(node, coin.SoGeoOrigin):
+            node = coin.SoGeoOrigin()
+            sg.insertChild(node, 0)
+
+        return node
+
+    def setLatLon(self, lat, lon):
+        import utm
+        x, y, zone_number, zone_letter = utm.from_latlon(lat, lon)
+        self.obj.UtmZone = zone_list[zone_number - 1]
+        self.obj.Origin = (x, y, 0.0)
 
 
 class _ViewProviderSite(ArchSite._ViewProviderSite):
