@@ -227,10 +227,14 @@ class _Road(ArchComponent.Component):
                                        vec_sand_left + FreeCAD.Vector(-offset, 0, FreeCAD.ActiveDocument.Site.Terrain.Shape.BoundBox.ZMin), vec_sand_left])
 
         cutshapes, fillshapes = self.makeSolids(obj, [cutProfile, fillProfile], w, (vec_up_right + vec_up_left) / 2)
-        cut = self.calculateCut(obj, cutshapes)
-        fill = self.calculateFill(obj, fillshapes)
-        Part.show(cut)
-        Part.show(fill)
+        cuts = self.calculateCut(obj, cutshapes)
+        fills = self.calculateFill(obj, fillshapes)
+        if cuts:
+            for cut in cuts:
+                Part.show(cut, "RoadCut")
+        if fills:
+            for fill in fills:
+                Part.show(fill, "RoadFill")
 
         obj.Shape = Part.makeCompound(shapes)
 
@@ -276,31 +280,35 @@ class _Road(ArchComponent.Component):
 
     def calculateFill(self, obj, solid):
         import BOPTools.SplitAPI as splitter
-
         common = solid.common(FreeCAD.ActiveDocument.Site.Terrain.Shape)
         if common.Area > 0:
             sp = splitter.slice(solid, [common, ], "Split")
-            common.Placement.Base.z += 10
+            common.Placement.Base.z += 1
+            solids = []
             for sol in sp.Solids:
                 common1 = sol.common(common)
                 if common1.Area > 0:
-                    #obj.FillVolume = sol.Volume
-                    return sol
+                    solids.append(sol)
+            if len(solids) > 0:
+                return solids
         return None
 
     def calculateCut(self, obj, solid):
         import BOPTools.SplitAPI as splitter
-
         common = solid.common(FreeCAD.ActiveDocument.Site.Terrain.Shape)
         if common.Area > 0:
             sp = splitter.slice(solid, [common, ], "Split")
-            sp = sp.Solids[0].Shells[0]
-            sp = sp.cut(common)
-            #sp = sp.cut(solid.Faces[0])
-            shell = sp.cut(common)
-            #obj.CutVolume = sp.Volume
-            if shell:
-                return  shell
+            shells = []
+            commoncopy = common.copy()
+            commoncopy.Placement.Base.z -= 1
+            for sol in sp.Solids:
+                common1 = sol.common(commoncopy)
+                if common1.Area > 0:
+                    shell = sol.Shells[0]
+                    shell = shell.cut(common)
+                    shells.append(shell)
+            if len(shells) > 0:
+                return shells
         return None
 
 
@@ -368,7 +376,7 @@ class _CommandRoad(gui_base_original.Creator):
         """Set icon, menu and tooltip."""
         return {'Pixmap': str(os.path.join(DirIcons, "Road.svg")),
                 'MenuText': QtCore.QT_TRANSLATE_NOOP("PVPlantRoad", "Road"),
-                'Accel': "C, T",
+                'Accel': "C, R",
                 'ToolTip': QtCore.QT_TRANSLATE_NOOP("PVPlantRoad",
                                                     "Creates a Road object from setup dialog.")}
 

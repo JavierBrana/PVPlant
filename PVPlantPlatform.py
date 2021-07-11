@@ -336,7 +336,7 @@ class _ViewProviderPlatform(ArchComponent.ViewProviderComponent):
         ArchComponent.ViewProviderComponent.__init__(self, vobj)
 
     def getIcon(self):
-        return str(os.path.join(PVPlantResources.DirIcons, "platform.svg"))
+        return str(os.path.join(PVPlantResources.DirIcons, "slope.svg"))
 
 
 
@@ -391,9 +391,9 @@ class _CommandPlatform(gui_base_original.Creator):
 
     def GetResources(self):
         """Set icon, menu and tooltip."""
-        return {'Pixmap': str(os.path.join(DirIcons, "platform.svg")),
+        return {'Pixmap': str(os.path.join(DirIcons, "slope.svg")),
                 'MenuText': QtCore.QT_TRANSLATE_NOOP("PVPlantPlatform", "Platform"),
-                'Accel': "C, T",
+                'Accel': "C, P",
                 'ToolTip': QtCore.QT_TRANSLATE_NOOP("PVPlantPlatform",
                                                     "Creates a Platform object from setup dialog.")}
 
