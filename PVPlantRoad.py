@@ -179,7 +179,7 @@ class _Road(ArchComponent.Component):
         obj.Proxy = self
 
     def execute(self, obj):
-        import Part, DraftGeomUtils, math
+        import Part, math
         import Draft
 
         w = obj.Base.Shape
@@ -210,9 +210,34 @@ class _Road(ArchComponent.Component):
 
         p = Part.Wire([edge1, edge2, edge3, edge4, edge5])
         profiles.append(p)
-
         p = Part.Wire([edge6, edge8, edge1, edge7])
         profiles.append(p)
+        shapes = self.makeSolids(obj, profiles, w, (vec_up_right + vec_up_left) / 2)
+
+        angle = 30
+        height = FreeCAD.ActiveDocument.Site.Terrain.Shape.BoundBox.ZMax - obj.Height.Value
+        offset = height / math.tan(math.radians(angle))
+
+        cutProfile = Part.makePolygon([vec_sand_left, vec_sand_right, vec_sand_right + FreeCAD.Vector(offset, 0, FreeCAD.ActiveDocument.Site.Terrain.Shape.BoundBox.ZMax),
+                                       vec_sand_left + FreeCAD.Vector(-offset, 0, FreeCAD.ActiveDocument.Site.Terrain.Shape.BoundBox.ZMax), vec_sand_left])
+
+        height = obj.Height.Value - FreeCAD.ActiveDocument.Site.Terrain.Shape.BoundBox.ZMin
+        offset = height / math.tan(math.radians(angle))
+        fillProfile = Part.makePolygon([vec_sand_left, vec_sand_right, vec_sand_right + FreeCAD.Vector(offset, 0, FreeCAD.ActiveDocument.Site.Terrain.Shape.BoundBox.ZMin),
+                                       vec_sand_left + FreeCAD.Vector(-offset, 0, FreeCAD.ActiveDocument.Site.Terrain.Shape.BoundBox.ZMin), vec_sand_left])
+
+        cutshapes, fillshapes = self.makeSolids(obj, [cutProfile, fillProfile], w, (vec_up_right + vec_up_left) / 2)
+        cut = self.calculateCut(obj, cutshapes)
+        fill = self.calculateFill(obj, fillshapes)
+        Part.show(cut)
+        Part.show(fill)
+
+        obj.Shape = Part.makeCompound(shapes)
+
+
+    def makeSolids(self, obj, profiles, w, origen):
+        import DraftGeomUtils
+        import math
 
         shapes = []
         for p in profiles:
@@ -221,7 +246,7 @@ class _Road(ArchComponent.Component):
                 c = p.CenterOfMass
             else:
                 c = p.BoundBox.Center
-            c = (vec_up_right + vec_up_left) / 2
+            c =  origen
             delta = w.Vertexes[0].Point - c
             p.translate(delta)
 
@@ -231,11 +256,9 @@ class _Road(ArchComponent.Component):
                 v1 = w.Vertexes[1].Point - w.Vertexes[0].Point
             v2 = DraftGeomUtils.getNormal(p)
             rot = FreeCAD.Rotation(v2, v1)
-            print (rot, " - ", math.degrees(rot.Angle))
             #p.rotate(w.Vertexes[0].Point, rot.Axis, math.degrees(rot.Angle))
             ang = rot.toEuler()[0]
             p.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), ang)
-
 
             if p.Faces:
                 for f in p.Faces:
@@ -249,8 +272,37 @@ class _Road(ArchComponent.Component):
                 for pw in p.Wires:
                     sh = w.makePipeShell([pw], True, False, 2)
                     shapes.append(sh)
+        return shapes
 
-        obj.Shape = Part.makeCompound(shapes)
+    def calculateFill(self, obj, solid):
+        import BOPTools.SplitAPI as splitter
+
+        common = solid.common(FreeCAD.ActiveDocument.Site.Terrain.Shape)
+        if common.Area > 0:
+            sp = splitter.slice(solid, [common, ], "Split")
+            common.Placement.Base.z += 10
+            for sol in sp.Solids:
+                common1 = sol.common(common)
+                if common1.Area > 0:
+                    #obj.FillVolume = sol.Volume
+                    return sol
+        return None
+
+    def calculateCut(self, obj, solid):
+        import BOPTools.SplitAPI as splitter
+
+        common = solid.common(FreeCAD.ActiveDocument.Site.Terrain.Shape)
+        if common.Area > 0:
+            sp = splitter.slice(solid, [common, ], "Split")
+            sp = sp.Solids[0].Shells[0]
+            sp = sp.cut(common)
+            #sp = sp.cut(solid.Faces[0])
+            shell = sp.cut(common)
+            #obj.CutVolume = sp.Volume
+            if shell:
+                return  shell
+        return None
+
 
     def makeLoft(self, profile):
         return

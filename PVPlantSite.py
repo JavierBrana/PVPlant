@@ -601,7 +601,8 @@ class _PVPlantSite(ArchSite._Site):
             if obj.Terrain and obj.Boundary:
                 # TODO: Definir los objetos que se pueden proyectar
                 #if obj.Boundary.TypeId == 'Part::Part2DObject':
-                projectWireOnMesh(obj.Boundary, obj.Terrain.Mesh)
+                #projectWireOnMesh(obj.Boundary, obj.Terrain.Mesh)
+                print("Calcular 3D boundary")
         '''
         if prop == "Terrain":
             if obj.Terrain:

@@ -161,6 +161,19 @@ class _Platform(ArchComponent.Component):
                         "Platform",
                         QT_TRANSLATE_NOOP("App::Property", "Connection")).CutSlope = 60.00
 
+        # Output values:
+        obj.addProperty("App::PropertyVolume",
+                        "CutVolume",
+                        "Output",
+                        QT_TRANSLATE_NOOP("App::Property", "Connection")).CutVolume = 0.00
+        obj.setEditorMode("CutVolume", 1)
+
+        obj.addProperty("App::PropertyVolume",
+                        "FillVolume",
+                        "Output",
+                        QT_TRANSLATE_NOOP("App::Property", "Connection")).FillVolume = 0.00
+        obj.setEditorMode("FillVolume", 1)
+
     def onDocumentRestored(self, obj):
         """Method run when the document is restored.
         Re-adds the Arch component, and object properties."""
@@ -246,49 +259,45 @@ class _Platform(ArchComponent.Component):
         import math
         import BOPTools.SplitAPI as splitter
 
-        pl = obj.Placement.Base
-
         zz = FreeCAD.ActiveDocument.Site.Terrain.Shape.BoundBox.ZMin if dir == 0 \
             else FreeCAD.ActiveDocument.Site.Terrain.Shape.BoundBox.ZMax
-        height = abs(zz - pl.z)
+        height = abs(zz - base.Placement.Base.z)
         angle = obj.EmbankmentSlope.Value if dir == 0 else obj.CutSlope.Value
 
-        offset = base.Wires[0].makeOffset2D(height / math.tan(math.radians(angle)), join=0)
+        offset = base.Wires[0].makeOffset2D((height - 10) / math.tan(math.radians(angle)), join=0)
         offset.Placement.Base.z = zz
 
         offset1 = base.Wires[0].makeOffset2D(10 / math.tan(math.radians(angle)), join=0)
-        offset1.Placement.Base.z = pl.z + (-10) if dir == 0 else 10
+        offset1.Placement.Base.z = base.Placement.Base.z + (-10 if dir == 0 else 10)
 
-        offset2 = base.Wires[0].makeOffset2D(20 / math.tan(math.radians(angle)), join=0)
-        offset2.Placement.Base.z = pl.z + (-20) if dir == 0 else 20
+        loft1 = Part.makeLoft([base, offset1], True)
+        loft2 = Part.makeLoft([offset1, offset], True)
+        solid = loft1.fuse(loft2)
 
-        solid = None
-        if True:
-            solid = Part.makeLoft([base, offset1, offset2, offset], True)
-        else:
-            faces = []
-            faces.append(Part.Face(base))
-            faces.append(Part.Face(offset))
-            count = -1
-            lines = []
-            for vertex in base.Vertexes:
-                for i in range(2):
-                    lines.append(Part.LineSegment(vertex.Point, offset.Vertexes[count].Point))
-                    count += 1
-
-            count = -1
-            count1 = 0
-            for i in range(len(lines)):
-                if i % 2 == 0:
-                    line = lines[i].toShape()
-                    faces.append(line.revolve(line.Vertexes[0].Point, FreeCAD.Vector(0, 0, 1), 90))
-                else:
-                    faces.append(Part.makeLoft([base.Edges[count1], offset.Edges[count]]))
-                    count1 += 1
+        ''' old code. Only for rectagle pad:
+        faces = []
+        faces.append(Part.Face(base))
+        faces.append(Part.Face(offset))
+        count = -1
+        lines = []
+        for vertex in base.Vertexes:
+            for i in range(2):
+                lines.append(Part.LineSegment(vertex.Point, offset.Vertexes[count].Point))
                 count += 1
 
-            solid = Part.makeSolid(Part.makeShell(Part.makeCompound(faces).Faces))
+        count = -1
+        count1 = 0
+        for i in range(len(lines)):
+            if i % 2 == 0:
+                line = lines[i].toShape()
+                faces.append(line.revolve(line.Vertexes[0].Point, FreeCAD.Vector(0, 0, 1), 90))
+            else:
+                faces.append(Part.makeLoft([base.Edges[count1], offset.Edges[count]]))
+                count1 += 1
+            count += 1
 
+        solid = Part.makeSolid(Part.makeShell(Part.makeCompound(faces).Faces))
+        '''
         return solid
 
     def calculateFill(self, obj, solid):
@@ -297,9 +306,12 @@ class _Platform(ArchComponent.Component):
         common = solid.common(FreeCAD.ActiveDocument.Site.Terrain.Shape)
         if common.Area > 0:
             sp = splitter.slice(solid, [common, ], "Split")
-            solid = sp.Solids[0] # TODO: Asegurarme que este es el SOLID que hay que coger
-            return solid
-
+            common.Placement.Base.z += 10
+            for sol in sp.Solids:
+                common1 = sol.common(common)
+                if common1.Area > 0:
+                    obj.FillVolume = sol.Volume
+                    return sol
         return None
 
     def calculateCut(self, obj, solid):
@@ -313,6 +325,7 @@ class _Platform(ArchComponent.Component):
             sp = sp.cut(common)
             #sp = sp.cut(solid.Faces[0])
             shell = sp.cut(common)
+            obj.CutVolume = sp.Volume
             if shell:
                 return  shell
         return None

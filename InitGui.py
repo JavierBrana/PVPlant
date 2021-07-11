@@ -38,9 +38,7 @@ class PVPlantWorkbench (Workbench):
                      "PVPlantPlatform",
                      "PVPlantRoad",
                      ]
-        self.list1 = [#"PVPlantFence",
-                     "PVPlantFenceGroup",
-                     "PVPlantProyectToMesh",
+        self.list1 = ["PVPlantProyectToMesh",
                      "PVPlantFoundation"
                      "ConfigureRack",
                      "RackType",
@@ -48,6 +46,7 @@ class PVPlantWorkbench (Workbench):
                      "PVPlantAdjustToTerrain",
                      "PVPlantConvertTo",
                      ]
+
         self.list2 = [
                     "PVPlantTree",
                     "PVPlantFenceGroup",
