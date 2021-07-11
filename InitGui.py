@@ -39,8 +39,6 @@ class PVPlantWorkbench (Workbench):
                      "PVPlantRoad",
                      ]
         self.list1 = [
-                     "PVPlantFoundation"
-                     "ConfigureRack",
                      "RackType",
                      "PVPlantPlacement",
                      "PVPlantAdjustToTerrain",
