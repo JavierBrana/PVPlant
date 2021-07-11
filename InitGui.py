@@ -52,9 +52,11 @@ class PVPlantWorkbench (Workbench):
                     "PVPlantFenceGroup",
                     "PVPlantBoxEnclosure",
                     ]
+
         self.list3 = ["ExportToPVSyst",
                       "PVPlantBOQMechanical",
                     ]
+
         self.electricalList = ["PVPlantStringBox",
                                "PVPlantCable",
 
