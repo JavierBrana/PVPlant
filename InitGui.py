@@ -19,7 +19,7 @@ class PVPlantWorkbench (Workbench):
         # Mias
         import PVPlantGeoreferencing,  PVPlantRack, PVPlantPlacement, \
             PVPlant_Import, PVPlantTerrainAnalisys, PVPlantSite, PVPlantImportGrid,PVPlantFence,\
-            PVPlantProyectToMesh, PVPlantFoundation, PVPlantCreateTerrainMesh, \
+            PVPlantFoundation, PVPlantCreateTerrainMesh, \
             PVPlantTreeGenerator, exportPVSyst, PVPlantTrench, PVPEarthWorks, PVPlantBOQFrames, \
             PVPlantStringBox, PVPlantCable, PVPlantPlatform,  PVPlantRoad, \
             reload
@@ -38,7 +38,7 @@ class PVPlantWorkbench (Workbench):
                      "PVPlantPlatform",
                      "PVPlantRoad",
                      ]
-        self.list1 = ["PVPlantProyectToMesh",
+        self.list1 = [
                      "PVPlantFoundation"
                      "ConfigureRack",
                      "RackType",
