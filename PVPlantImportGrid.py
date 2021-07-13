@@ -386,7 +386,6 @@ def getElevation(lat, lon, b=50.35, le=11.17, size=40):
 
 class _ImportPointsTaskPanel:
 
-    
     def __init__(self, obj = None):
         self.obj = None
         self.select = 0
@@ -402,6 +401,7 @@ class _ImportPointsTaskPanel:
 
         self.form = [self.form1, FreeCADGui.PySideUic.loadUi(os.path.dirname(__file__) + "/PVPlantCreateTerrainMesh.ui")]
 
+    ''' future:
     def retranslateUi(self, dialog):
         self.form1.setWindowTitle("Configuracion del Rack")
         self.labelModule.setText(QtGui.QApplication.translate("PVPlant", "Modulo:", None))
@@ -420,6 +420,7 @@ class _ImportPointsTaskPanel:
         self.labelRackType.setText(QtGui.QApplication.translate("Arch", "Tipo de estructura:", None))
         self.labelLevel.setText(QtGui.QApplication.translate("Arch", "Nivel:", None))
         self.labelOffset.setText(QtGui.QApplication.translate("Arch", "Offset", None))
+    '''
 
     def add(self):
         sel = FreeCADGui.Selection.getSelection()
@@ -429,12 +430,12 @@ class _ImportPointsTaskPanel:
 
     def openFileDEM(self):
         filters = "Esri ASC (*.asc);;CSV (*.csv);;All files (*.*)"
-        filename = QtGui.QFileDialog.getOpenFileName(None, "Open DEM,",
+        filename = QtGui.QFileDialog.getOpenFileName(None,
+                                                    "Open DEM,",
                                                     "",
                                                     filters)
         self.filename = filename[0]
         self.form1.editDEM.setText(filename[0])
-
 
     def mainToggle(self, radiobox):
         if radiobox is self.form1.radio1:
@@ -464,122 +465,110 @@ class _ImportPointsTaskPanel:
             PointObject.addPoints(pts)
             PointGroup.Points = PointObject
 
-        elif self.select == 1:
+        elif self.select == 1: # DEM.
             import numpy as np
-            grid_space = 1
 
-            file = open(self.filename, "r")
-            templist = [line.split() for line in file.readlines()]
-            file.close()
-            del file
+            root, extension = os.path.splitext(self.filename)
 
-            # Read meta data:
-            meta = templist[0:6]
-            nx = int(meta[0][1])                        # NCOLS
-            ny = int(meta[1][1])                        # NROWS
-            xllcorner = round(float(meta[2][1]), 3)     # XLLCENTER
-            yllcorner = round(float(meta[3][1]), 3)     # YLLCENTER
-            cellsize = round(float(meta[4][1]), 3)      # CELLSIZE
-            nodata_value = float(meta[5][1])            # NODATA_VALUE
+            if extension.lower() == ".asc":
+                grid_space = 1
 
-            # set coarse_factor
-            coarse_factor = max(round(grid_space / cellsize), 1)
+                file = open(self.filename, "r")
+                templist = [line.split() for line in file.readlines()]
+                file.close()
+                del file
 
-            # Get z values
-            #templist = templist[6::]
-            templist = templist[6:(6 + ny)]
-            templist = [templist[i][0::coarse_factor] for i in np.arange(0, len(templist), coarse_factor)]
-            datavals = np.array(templist).astype(float)
-            del templist
+                # Read meta data:
+                meta = templist[0:6]
+                nx = int(meta[0][1])                        # NCOLS
+                ny = int(meta[1][1])                        # NROWS
+                xllcorner = round(float(meta[2][1]), 3)     # XLLCENTER
+                yllcorner = round(float(meta[3][1]), 3)     # YLLCENTER
+                cellsize = round(float(meta[4][1]), 3)      # CELLSIZE
+                nodata_value = float(meta[5][1])            # NODATA_VALUE
 
-            # create xy cordinates
-            x = cellsize * np.arange(nx)[0::coarse_factor] + xllcorner
-            y = cellsize * np.arange(ny)[-1::-1][0::coarse_factor] + yllcorner
-            x, y = np.meshgrid(x, y)
+                # set coarse_factor
+                coarse_factor = max(round(grid_space / cellsize), 1)
 
-            xx = x.flatten()
-            yy = y.flatten()
-            zz = datavals.flatten()
+                # Get z values
+                templist = templist[6:(6 + ny)]
+                templist = [templist[i][0::coarse_factor] for i in np.arange(0, len(templist), coarse_factor)]
+                datavals = np.array(templist).astype(float)
+                templist.clear()
+                del templist
 
+                # create xy cordinates
+                x = cellsize * np.arange(nx)[0::coarse_factor] + xllcorner
+                y = cellsize * np.arange(ny)[-1::-1][0::coarse_factor] + yllcorner
+                x, y = np.meshgrid(x, y)
 
-            del x
-            del y
-            del datavals
+                xx = x.flatten()
+                yy = y.flatten()
+                zz = datavals.flatten()
 
-            pts = []
-            for i in range(0, len(xx)):
-                pts.append(FreeCAD.Vector(xx[i] * 1000, yy[i] * 1000, zz[i] * 1000))
+                x[:] = 0
+                y[:] = 0
+                datavals[:] = 0
+                del x
+                del y
+                del datavals
 
-            PointObject.addPoints(pts)
-            PointGroup.Points = PointObject
-            del xx, yy, zz
+                pts = []
+                for i in range(0, len(xx)):
+                    pts.append(FreeCAD.Vector(xx[i] * 1000, yy[i] * 1000, zz[i] * 1000))
 
+                xx[:] = 0
+                yy[:] = 0
+                zz[:] = 0
+                del xx
+                del yy
+                del zz
 
-        elif self.select == 2:
-            import csv
-            import numpy as np
-            import matplotlib.mlab as ml
+                PointObject.addPoints(pts)
+                PointGroup.Points = PointObject
+                pts.clear()
 
-            import scipy as sp
-            import scipy.interpolate
+            elif extension.lower() == ".csv" or extension.lower() == ".txt":  # x, y, z from gps
+                import csv
+                import numpy as np
+                import matplotlib.mlab as ml
 
-            x=[]
-            y=[]
-            z=[]
-            with open(self.filename, newline='') as csvfile:
-                spamreader = csv.reader(csvfile, delimiter=';')
-                for row in spamreader:
-                    x.append(float(row[1]))
-                    y.append(float(row[2]))
-                    z.append(float(row[3]))
+                import scipy as sp
+                import scipy.interpolate
 
-            x = np.array(x)
-            y = np.array(y)
-            z = np.array(z)
-            spline = sp.interpolate.Rbf(x, y, z, function='thin-plate')
-            '''_____________________________________|
-                multiquadric': sqrt((r/self.epsilon)**2 + 1)
-                'inverse': 1.0/sqrt((r/self.epsilon)**2 + 1)
-                'gaussian': exp(-(r/self.epsilon)**2)
-                'linear': r
-                'cubic': r**3
-                'quintic': r**5
-                'thin_plate': r**2 * log(r)
-            '''
+                x=[]
+                y=[]
+                z=[]
+                delim = ';' if extension.lower() == "csv" else ' '
+                with open(self.filename, newline='') as csvfile:
+                    spamreader = csv.reader(csvfile, delimiter = delim)
+                    for row in spamreader:
+                        x.append(float(row[1]))
+                        y.append(float(row[2]))
+                        z.append(float(row[3]))
 
-            xi = np.linspace(min(x), max(x))
-            yi = np.linspace(min(y), max(y))
-            X, Y = np.meshgrid(xi, yi)
-            Z = spline(X, Y)
+                x = np.array(x)
+                y = np.array(y)
+                z = np.array(z)
+                spline = sp.interpolate.Rbf(x, y, z, function='thin-plate')
 
-            xx = X.flatten()
-            yy = Y.flatten()
-            zz = Z.flatten()
+                xi = np.linspace(min(x), max(x))
+                yi = np.linspace(min(y), max(y))
+                X, Y = np.meshgrid(xi, yi)
+                Z = spline(X, Y)
 
-            i = 0
-            pts = []
-            for point in xx:
-                pts.append(FreeCAD.Vector(xx[i] * 1000, yy[i] * 1000, zz[i] * 1000))
-                i += 1
+                xx = X.flatten()
+                yy = Y.flatten()
+                zz = Z.flatten()
 
-            PointObject.addPoints(pts)
-            PointGroup.Points = PointObject
+                i = 0
+                pts = []
+                for point in xx:
+                    pts.append(FreeCAD.Vector(xx[i] * 1000, yy[i] * 1000, zz[i] * 1000))
+                    i += 1
 
-            '''
-            nrows, ncols = np.shape(Z)
-            xres = (xmax - xmin) / ncols
-            yres = (ymax - ymin) / nrows
-            geotransform = (xmin, xres, 0, ymin, 0, yres)
-            driver = gdal.GetDriverByName("GTiff")
-            ds = driver.Create('output.tif', nrows, ncols, 1, gdal.GDT_Float32)
-            ds.SetGeoTransform(geotransform)
-            # Establish its coordinate
-            srs = osr.SpatialReference()
-            srs.ImportFromEPSG(your EPSG code)
-            ds.SetProjection(srs.ExportToWkt())
-            ds.GetRasterBand(1).WriteArray(Z)
-            ds = None
-            '''
+                PointObject.addPoints(pts)
+                PointGroup.Points = PointObject
 
 
         FreeCAD.ActiveDocument.recompute()

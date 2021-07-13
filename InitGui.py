@@ -21,7 +21,7 @@ class PVPlantWorkbench (Workbench):
             PVPlant_Import, PVPlantTerrainAnalisys, PVPlantSite, PVPlantImportGrid,PVPlantFence,\
             PVPlantFoundation, PVPlantCreateTerrainMesh, \
             PVPlantTreeGenerator, exportPVSyst, PVPlantTrench, PVPEarthWorks, PVPlantBOQFrames, \
-            PVPlantStringBox, PVPlantCable, PVPlantPlatform,  PVPlantRoad, \
+            PVPlantStringBox, PVPlantCable, PVPlantPad, PVPlantRoad, \
             reload
 
         # A list of command names created in the line above
@@ -35,7 +35,7 @@ class PVPlantWorkbench (Workbench):
                      "TerrainAnalisys",
                      "PVPlantTrench",
                      "PVPlantEarthworks",
-                     "PVPlantPlatform",
+                     "PVPlantPad",
                      "PVPlantRoad",
                      ]
         self.list1 = [
