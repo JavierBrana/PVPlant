@@ -31,16 +31,16 @@ import PVPlantResources
 from PVPlantResources import DirIcons as DirIcons
 
 
-def makePlatform(base=None):
-    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Platform")
-    _Platform(obj)
-    _ViewProviderPlatform(obj.ViewObject)
+def makePad(base=None):
+    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Pad")
+    _Pad(obj)
+    _ViewProviderPad(obj.ViewObject)
     obj.Base = base
     FreeCAD.ActiveDocument.recompute()
     return obj
 
 
-class _Platform(ArchComponent.Component):
+class _Pad(ArchComponent.Component):
     def __init__(self, obj):
         # Definición de Variables:
         ArchComponent.Component.__init__(self, obj)
@@ -142,23 +142,23 @@ class _Platform(ArchComponent.Component):
         ##if not obj.Base:
         obj.addProperty("App::PropertyLength",
                         "Width",
-                        "Platform",
+                        "Pad",
                         QT_TRANSLATE_NOOP("App::Property", "Connection")).Width = 5000
 
         obj.addProperty("App::PropertyLength",
                         "Length",
-                        "Platform",
+                        "Pad",
                         QT_TRANSLATE_NOOP("App::Property", "Connection")).Length = 10000
 
 
         obj.addProperty("App::PropertyAngle",
                         "EmbankmentSlope",
-                        "Platform",
+                        "Pad",
                         QT_TRANSLATE_NOOP("App::Property", "Connection")).EmbankmentSlope = 25.00
 
         obj.addProperty("App::PropertyAngle",
                         "CutSlope",
-                        "Platform",
+                        "Pad",
                         QT_TRANSLATE_NOOP("App::Property", "Connection")).CutSlope = 60.00
 
         # Output values:
@@ -331,7 +331,7 @@ class _Platform(ArchComponent.Component):
         return None
 
 
-class _ViewProviderPlatform(ArchComponent.ViewProviderComponent):
+class _ViewProviderPad(ArchComponent.ViewProviderComponent):
     def __init__(self, vobj):
         ArchComponent.ViewProviderComponent.__init__(self, vobj)
 
@@ -341,7 +341,7 @@ class _ViewProviderPlatform(ArchComponent.ViewProviderComponent):
 
 
 
-class _PlatformTaskPanel:
+class _PadTaskPanel:
 
     def __init__(self, obj=None):
 
@@ -381,7 +381,7 @@ from draftutils.messages import _msg, _err
 from draftutils.translate import translate
 
 
-class _CommandPlatform(gui_base_original.Creator):
+class _CommandPad(gui_base_original.Creator):
     """Gui command for the Line tool."""
 
     def __init__(self):
@@ -392,14 +392,14 @@ class _CommandPlatform(gui_base_original.Creator):
     def GetResources(self):
         """Set icon, menu and tooltip."""
         return {'Pixmap': str(os.path.join(DirIcons, "slope.svg")),
-                'MenuText': QtCore.QT_TRANSLATE_NOOP("PVPlantPlatform", "Platform"),
+                'MenuText': QtCore.QT_TRANSLATE_NOOP("PVPlantPad", "Pad"),
                 'Accel': "C, P",
-                'ToolTip': QtCore.QT_TRANSLATE_NOOP("PVPlantPlatform",
-                                                    "Creates a Platform object from setup dialog.")}
+                'ToolTip': QtCore.QT_TRANSLATE_NOOP("PVPlantPad",
+                                                    "Creates a Pad object from setup dialog.")}
 
     def Activated(self, name=translate("draft", "Line")):
         """Execute when the command is called."""
-        makePlatform()
+        makePad()
 
         return
         # super(_CommandTrench, self).Activated(name)
@@ -542,10 +542,10 @@ class _CommandPlatform(gui_base_original.Creator):
         if self.ui and self.ui.continueMode:
             self.Activated()
 
-        self.makePlatform()
+        self.makePad()
 
-    def makePlatform(self):
-        makePlatform(self.path)
+    def makePad(self):
+        makePad(self.path)
 
     def removeTemporaryObject(self):
         """Remove temporary object created."""
@@ -641,4 +641,4 @@ class _CommandPlatform(gui_base_original.Creator):
 
 
 if FreeCAD.GuiUp:
-    FreeCADGui.addCommand('PVPlantPlatform', _CommandPlatform())
+    FreeCADGui.addCommand('PVPlantPad', _CommandPad())
