@@ -95,17 +95,11 @@ class _TaskPanel:
         import numpy as np
         from scipy.spatial import Delaunay
 
-        # Get selected group(s) points
         test = []
         for Point in self.obj.Points.Points:
             test.append([float(Point.x), float(Point.y), float(Point.z)])
 
-        # Normalize points
-        fpoint = test[0]
-        nbase = FreeCAD.Vector(fpoint[0], fpoint[1], fpoint[2])
-        #scale_factor = FreeCAD.Vector(base.x / 1677.7216, base.y / 1677.7216, base.Z / 1677.7216)
-        #nbase = scale_factor.multiply(1677.7216)
-
+        nbase = FreeCAD.Vector(test[0][0], test[0][1], test[0][2])
         data = []
         for i in test:
             data.append([i[0] - nbase.x, i[1] - nbase.y, i[2] - nbase.z])
@@ -115,7 +109,7 @@ class _TaskPanel:
         del test
         del data
 
-        # TODO: si es muy grande, dividir el calculo de la maya en varia
+        # TODO: si es muy grande, dividir el cálculo de la maya en varias etapas
         # Create delaunay triangulation
         tri = Delaunay(Data[:, :2])
 
