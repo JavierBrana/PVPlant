@@ -93,7 +93,7 @@ class _TaskPanel:
 
     def accept(self):
         import numpy as np
-        import scipy.spatial
+        from scipy.spatial import Delaunay
 
         # Get selected group(s) points
         test = []
@@ -115,8 +115,9 @@ class _TaskPanel:
         del test
         del data
 
+        # TODO: si es muy grande, dividir el calculo de la maya en varia
         # Create delaunay triangulation
-        tri = scipy.spatial.Delaunay(Data[:, :2])
+        tri = Delaunay(Data[:, :2])
 
         useMesh = True
         if useMesh:

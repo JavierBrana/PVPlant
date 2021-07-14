@@ -457,11 +457,12 @@ class _ImportPointsTaskPanel:
         FreeCAD.ActiveDocument.Point_Groups.addObject(PointGroup)
         PointObject = PointGroup.Points.copy()
 
-        if self.select == 0:
+        if self.select == 0:    # Google or bing or ...
             #for item in self.obj:
                 #if self.groupbox.isChecked:break
             resol = FreeCAD.Units.Quantity(self.valueResolution.text()).Value
-            Site = FreeCAD.ActiveDocument.Site; pts = getGridElevationFromBing(self.obj, Site.Latitude, Site.Longitude, resol)
+            Site = FreeCAD.ActiveDocument.Site
+            pts = getGridElevationFromBing(self.obj, Site.Latitude, Site.Longitude, resol)
             PointObject.addPoints(pts)
             PointGroup.Points = PointObject
 
@@ -495,7 +496,6 @@ class _ImportPointsTaskPanel:
                 templist = [templist[i][0::coarse_factor] for i in np.arange(0, len(templist), coarse_factor)]
                 datavals = np.array(templist).astype(float)
                 templist.clear()
-                del templist
 
                 # create xy cordinates
                 x = cellsize * np.arange(nx)[0::coarse_factor] + xllcorner
@@ -509,9 +509,6 @@ class _ImportPointsTaskPanel:
                 x[:] = 0
                 y[:] = 0
                 datavals[:] = 0
-                del x
-                del y
-                del datavals
 
                 pts = []
                 for i in range(0, len(xx)):
@@ -520,9 +517,6 @@ class _ImportPointsTaskPanel:
                 xx[:] = 0
                 yy[:] = 0
                 zz[:] = 0
-                del xx
-                del yy
-                del zz
 
                 PointObject.addPoints(pts)
                 PointGroup.Points = PointObject
