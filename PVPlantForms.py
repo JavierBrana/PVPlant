@@ -652,7 +652,7 @@ class MapWindow(QtGui.QWidget):
             PointObject.addPoints(pts)
             PointGroup.Points = PointObject
 
-            # Draw polygons/bondary:
+            # Draw polygons/boundary:
             Wire = Draft.makeWire(pts, closed=True, face=False)
             Wire.Label = "Land"
             Draft.autogroup(Wire)
