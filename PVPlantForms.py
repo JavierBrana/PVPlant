@@ -612,13 +612,13 @@ class MapWindow(QtGui.QWidget):
             if item['geometry']['type'] == "LineString":
                 print ("")
             elif item['geometry']['type'] == "Point":
-                for coo in item['geometry']['coordinates']:
-                    print (coo)
-                    #center = ImportElevation.getSinglePointElevation(coo[1], coo[0])
+                for cords in item['geometry']['coordinates']:
+                    print (cords)
+                    #center = ImportElevation.getSinglePointElevation(cords[1], cords[0])
             elif item['geometry']['type'] == "Polygon":
                 import utm
-                for coo in item['geometry']['coordinates'][0]:
-                    georeferencing = utm.from_latlon(coo[1], coo[0])
+                for cords in item['geometry']['coordinates'][0]:
+                    georeferencing = utm.from_latlon(cords[1], cords[0])
                     break
                 break
         print (georeferencing)
@@ -626,10 +626,10 @@ class MapWindow(QtGui.QWidget):
 
         for item in items['features']:
             pts = []
-            for coo in item['geometry']['coordinates'][0]:
-                #pts.append(ImportElevation.getSinglePointElevation1(coo[1], coo[0]))
-                #pts.append(ImportElevation.getSinglePointElevationUtm(coo[1], coo[0]))
-                pts.append(ImportElevation.getSinglePointElevationFromBing(coo[1], coo[0]))
+            for cords in item['geometry']['coordinates'][0]:
+                #pts.append(ImportElevation.getSinglePointElevation1(cords[1], cords[0]))
+                #pts.append(ImportElevation.getSinglePointElevationUtm(cords[1], cords[0]))
+                pts.append(ImportElevation.getSinglePointElevationFromBing(cords[1], cords[0]))
 
             # Get or create "Point_Groups".
             try:

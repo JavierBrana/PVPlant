@@ -24,7 +24,7 @@ import os
 from PVPlantResources import DirIcons as DirIcons
 
 
-def SurfaceToPoints(suface):
+def SurfaceToPoints(surface):
     xmin = surface.BoundBox.XMin
     xmax = surface.BoundBox.XMax
     xlength = surface.BoundBox.XLenght
