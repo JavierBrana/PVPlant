@@ -71,6 +71,8 @@ class _TaskPanel:
         """
         Calculation of the 2D angle between triangle edges
         """
+        import math
+
         # Get user input
         MaxAngleLE = math.radians(int(self.form.MaxAngleLE.text()))
 
@@ -92,6 +94,9 @@ class _TaskPanel:
         return True
 
     def accept(self):
+        from datetime import datetime
+        starttime = datetime.now()
+
         import numpy as np
         from scipy.spatial import Delaunay
 
@@ -106,14 +111,31 @@ class _TaskPanel:
         Data = np.array(data)
         test.clear()
         data.clear()
-        del test
-        del data
 
         # TODO: si es muy grande, dividir el cálculo de la maya en varias etapas
         # Create delaunay triangulation
         tri = Delaunay(Data[:, :2])
+        print("tiempo delaunay:", datetime.now() - starttime)
+        starttime = datetime.now()
 
-        useMesh = True
+        List = []
+        for i in tri.vertices:
+            first = int(i[0])
+            second = int(i[1])
+            third = int(i[2])
+
+            # Test triangle
+            if self.MaxLength(Data[first], Data[second], Data[third]) \
+                    and self.MaxAngle(Data[first], Data[second], Data[third]):
+                List.append(Data[first])
+                List.append(Data[second])
+                List.append(Data[third])
+        print("tiempo filtro:", datetime.now() - starttime)
+        starttime = datetime.now()
+        print(List)
+        return
+
+        useMesh = False
         if useMesh:
             MeshList = []
             for i in tri.vertices:
@@ -137,28 +159,76 @@ class _TaskPanel:
 
         else:
             import Part
+            from array import array
             faces = []
+            cnt = 0
+            print("triangles: ")
+            print(tri.vertices, "\n")
             for i in tri.vertices:
                 first = int(i[0])
                 second = int(i[1])
                 third = int(i[2])
 
+                #print(i, " ", i.tolist())
+                print(array(Data[first].tolist()))
+
                 #Test triangle
-                if self.MaxLength(Data[first], Data[second], Data[third])\
-                        and self.MaxAngle(Data[first], Data[second], Data[third]):
+                #if self.MaxLength(Data[first], Data[second], Data[third])\
+                #        and self.MaxAngle(Data[first], Data[second], Data[third]):
 
-                    polygon = Part.makePolygon([(Data[first][0], Data[first][1], Data[first][2]),
-                                                (Data[second][0], Data[second][1], Data[second][2]),
-                                                (Data[third][0], Data[third][1], Data[third][2]),
-                                                (Data[first][0], Data[first][1], Data[first][2])])
-                    faces.append(Part.makeFilledFace(polygon.Edges))
+                vertexes = [(Data[first][0],  Data[first][1],  Data[first][2]),
+                            (Data[second][0], Data[second][1], Data[second][2]),
+                            (Data[third][0],  Data[third][1],  Data[third][2]),
+                            (Data[first][0],  Data[first][1],  Data[first][2])]
 
+                print("       ----", vertexes)
+                polygon = Part.makePolygon(vertexes)
+                Part.show(polygon)
+                faces.append(Part.Face(polygon))
+
+                cnt += 1
+                if cnt == 5:
+                    break
+
+                """
+                array = [[FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1, 0, 1), FreeCAD.Vector(2, 0, 0)],
+                         [FreeCAD.Vector(0, 1, 1), FreeCAD.Vector(1, 1, 2), FreeCAD.Vector(2, 1, 1)],
+                         [FreeCAD.Vector(0, 2, 0), FreeCAD.Vector(1, 2, 1.5), FreeCAD.Vector(2, 2, 0)],
+                         [FreeCAD.Vector(0, 3, 0), FreeCAD.Vector(1, 3, 0), FreeCAD.Vector(2, 3, 0.5)]]
+
+                # Display the points
+
+                v = []
+                for row in array:
+                    for point in row:
+                        v.append(Part.Vertex(point))
+
+                c = Part.Compound(v)
+                Part.show(c)
+
+                # Generate an interpolating surface
+
+                intSurf = Part.BSplineSurface()
+                intSurf.interpolate(array)
+
+                # Generate an approximating surface
+
+                appSurf = Part.BSplineSurface()
+                appSurf.approximate(Points=array)
+
+                # Display the surfaces
+
+                Part.show(intSurf.toShape())
+                Part.show(appSurf.toShape())
+                """
+
+            Part.show(Part.makeCompound(faces))
             shell = Part.makeShell(faces)
             Part.show(shell, "Land")
 
-
         FreeCAD.ActiveDocument.recompute()
         FreeCADGui.Control.closeDialog()
+        print("tiempo: tardado", datetime.now() - starttime)
 
     def reject(self):
         FreeCADGui.Control.closeDialog()
