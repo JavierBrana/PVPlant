@@ -166,7 +166,7 @@ class _Pad(ArchComponent.Component):
                         "Pad",
                         QT_TRANSLATE_NOOP("App::Property", "Connection")).TopsoilCalculation = False
 
-        obj.addProperty("App::PropertyBool",
+        obj.addProperty("App::PropertyLength",
                         "TopsoilHeight",
                         "Pad",
                         QT_TRANSLATE_NOOP("App::Property", "Connection")).TopsoilHeight = 300
@@ -312,7 +312,7 @@ class _Pad(ArchComponent.Component):
         if common.Area > 0:
             sp = splitter.slice(solid, [common, ], "Split")
             common.Placement.Base.z += 10
-            Part.show(common.extrude(FreeCAD.Vector(0, 0, 30)))
+            Part.show(common.extrude(FreeCAD.Vector(0, 0, -obj.TopsoilHeight)))
             volume = 0
             fills = []
             for sol in sp.Solids:
