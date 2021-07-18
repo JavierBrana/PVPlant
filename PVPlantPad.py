@@ -312,17 +312,19 @@ class _Pad(ArchComponent.Component):
         if common.Area > 0:
             sp = splitter.slice(solid, [common, ], "Split")
             common.Placement.Base.z += 10
-            obj.FillVolume = 0
+            Part.show(common.extrude(FreeCAD.Vector(0, 0, 30)))
+            volume = 0
             fills = []
             for sol in sp.Solids:
                 common1 = sol.common(common)
                 if common1.Area > 0:
-                    obj.FillVolume += sol.Volume
+                    volume += sol.Volume
                     fills.append(sol)
-            if len(solids) > 0:
-                base = solids[0]
-                for i in range(1, len(solids)):
-                    base = base.fuse(solids[i])
+            obj.FillVolume = volume
+            if len(fills) > 0:
+                base = fills[0]
+                for i in range(1, len(fills)):
+                    base = base.fuse(fills[i])
                 return base
         return None
 
@@ -333,14 +335,17 @@ class _Pad(ArchComponent.Component):
         if common.Area > 0:
             sp = splitter.slice(solid, [common, ], "Split")
             shells = []
+            volume = 0
             commoncopy = common.copy()
             commoncopy.Placement.Base.z -= 1
             for sol in sp.Solids:
                 common1 = sol.common(commoncopy)
                 if common1.Area > 0:
+                    volume += sol.Volume
                     shell = sol.Shells[0]
                     shell = shell.cut(common)
                     shells.append(shell)
+            obj.CutVolume = volume
             if len(shells) > 0:
                 base = shells[0]
                 for i in range(1, len(shells)):
@@ -404,6 +409,7 @@ class _CommandPad(gui_base_original.Creator):
         # super(_CommandTrench, self).__init__()
         gui_base_original.Creator.__init__(self)
         self.path = None
+        self.obj = None
 
     def GetResources(self):
         """Set icon, menu and tooltip."""
@@ -417,8 +423,8 @@ class _CommandPad(gui_base_original.Creator):
         """Execute when the command is called."""
 
         sel = FreeCADGui.Selection.getSelection()
-        if len(sel) == 0:
-            self.obj = makePad()
+        self.obj = makePad()
+        print(self.obj)
 
 
         gui_base_original.Creator.Activated(self, name=translate("draft", "Line"))
@@ -426,7 +432,7 @@ class _CommandPad(gui_base_original.Creator):
         self.ui.wireUi(name)
         self.ui.setTitle("Pad")
         #self.obj = self.doc.addObject("Part::Feature", self.featureName)
-        gui_utils.format_object(self.obj)
+        #gui_utils.format_object(self.obj)
 
         self.call = self.view.addEventCallback("SoEvent", self.action)
 
@@ -441,9 +447,11 @@ class _CommandPad(gui_base_original.Creator):
             Dictionary with strings that indicates the type of event received
             from the 3D view.
         """
+
+        print(self.obj)
         if arg["Type"] == "SoKeyboardEvent" and arg["Key"] == "ESCAPE":
             self.finish()
-            #TODO: borrar el pad generado.
+            FreeCAD.ActiveDocument.removeObject(self.obj.Name)
 
         elif arg["Type"] == "SoLocation2Event":
             self.point, ctrlPoint, self.info = gui_tool_utils.getPoint(self, arg)
