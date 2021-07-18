@@ -198,11 +198,6 @@ class _Pad(ArchComponent.Component):
 
 
         '''
-        self.changed = True
-
-        if prop in ["MaxPhi", "MinPhi", ]:
-            self.changed = False
-
         if prop == "Tilt":
             if not hasattr(self, "obj"):
                 return
@@ -317,11 +312,18 @@ class _Pad(ArchComponent.Component):
         if common.Area > 0:
             sp = splitter.slice(solid, [common, ], "Split")
             common.Placement.Base.z += 10
+            obj.FillVolume = 0
+            fills = []
             for sol in sp.Solids:
                 common1 = sol.common(common)
                 if common1.Area > 0:
-                    obj.FillVolume = sol.Volume
-                    return sol
+                    obj.FillVolume += sol.Volume
+                    fills.append(sol)
+            if len(solids) > 0:
+                base = solids[0]
+                for i in range(1, len(solids)):
+                    base = base.fuse(solids[i])
+                return base
         return None
 
     def calculateCut(self, obj, solid):
@@ -330,14 +332,20 @@ class _Pad(ArchComponent.Component):
         common = solid.common(FreeCAD.ActiveDocument.Site.Terrain.Shape)
         if common.Area > 0:
             sp = splitter.slice(solid, [common, ], "Split")
-            sp = sp.Solids[0]
-            sp = sp.Shells[0]
-            sp = sp.cut(common)
-            #sp = sp.cut(solid.Faces[0])
-            shell = sp.cut(common)
-            obj.CutVolume = sp.Volume
-            if shell:
-                return  shell
+            shells = []
+            commoncopy = common.copy()
+            commoncopy.Placement.Base.z -= 1
+            for sol in sp.Solids:
+                common1 = sol.common(commoncopy)
+                if common1.Area > 0:
+                    shell = sol.Shells[0]
+                    shell = shell.cut(common)
+                    shells.append(shell)
+            if len(shells) > 0:
+                base = shells[0]
+                for i in range(1, len(shells)):
+                    base = base.fuse(shells[i])
+                return base
         return None
 
 
