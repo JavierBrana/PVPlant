@@ -497,7 +497,7 @@ class _ImportPointsTaskPanel:
                 datavals = np.array(templist).astype(float)
                 templist.clear()
 
-                # create xy cordinates
+                # create xy coordinates
                 x = cellsize * np.arange(nx)[0::coarse_factor] + xllcorner
                 y = cellsize * np.arange(ny)[-1::-1][0::coarse_factor] + yllcorner
                 x, y = np.meshgrid(x, y)
