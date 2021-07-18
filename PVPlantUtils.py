@@ -151,7 +151,7 @@ def is_inside_sm(polygon, point):
         dy = dy2
         dy2 = point[1] - polygon[jj][1]
 
-        # consider only lines which are not completely above/bellow/right from the point
+        # consider only lines which are not completely above/below/right from the point
         if dy * dy2 <= 0.0 and (point[0] >= polygon[ii][0] or point[0] >= polygon[jj][0]):
 
             # non-horizontal line
@@ -168,7 +168,7 @@ def is_inside_sm(polygon, point):
                     dy == 0 and (point[0] - polygon[ii][0]) * (point[0] - polygon[jj][0]) <= 0)):
                 return 2
 
-            # there is another posibility: (dy=0 and dy2>0) or (dy>0 and dy2=0). It is skipped
+            # there is another possibility: (dy=0 and dy2>0) or (dy>0 and dy2=0). It is skipped
             # deliberately to prevent break-points intersections to be counted twice.
 
         ii = jj
