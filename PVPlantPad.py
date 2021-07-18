@@ -190,7 +190,7 @@ class _Pad(ArchComponent.Component):
 
         ArchComponent.Component.onDocumentRestored(self, obj)
         self.obj = obj
-        self.Type = "Trench"
+        self.Type = "Pad"
         obj.Proxy = self
 
     def onChanged(self, fp, prop):
