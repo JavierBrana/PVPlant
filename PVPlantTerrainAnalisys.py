@@ -238,19 +238,97 @@ def Contours_Part(Terrain, minor = 1000, mayor = 5000,
                         Contour.ViewObject.LineWidth = minorLineWidth
                         Contour.ViewObject.LineColor = minorColor
             inc += minor
-
-
         FreeCAD.ActiveDocument.recompute()
 
+# Base widget for task panel terrain analisys
+class _generalTaskPanel:
+    '''The TaskPanel for Slope setup'''
+
+    def __init__(self):
+        self.ranges = []
+
+        self.form = FreeCADGui.PySideUic.loadUi(os.path.dirname(__file__) + "/PVPlantTerrainAnalisys.ui")
+        self.tableWidget = self.form.tableWidget
+        self.form.editSteps.valueChanged.connect(self.changeDivision)
+
+    def updateTableValues(self):
+        maxval = self.form.editTo.value() - self.form.editFrom.value()
+        ran = maxval / self.tableWidget.rowCount()
+
+        for i in range(self.tableWidget.rowCount()):
+            for j in range(2):
+                item = self.tableWidget.item(i, j)
+                val = ran * (i + j)
+                item.setText('{:.1f}'.format(val))
+                self.ranges[i][j] = val
+
+        self.tableWidget.item(0, 0).setText('{:.1f}'.format(self.form.editFrom.value()))
+        self.tableWidget.item(self.tableWidget.rowCount() - 1, 1).setText('{:.1f}'.format(self.form.editTo.value()))
+
+    def changeDivision(self):
+        rows = self.tableWidget.rowCount()
+        to = self.form.editSteps.value()
+        if to > rows:
+            for i in range(0, to - rows):
+                self.ranges.append([0.0, 0.0, (0.0, 0.0, 0.0)])
+                self.createRow()
+        elif to < rows:
+            self.tableWidget.setRowCount(to)
+            self.ranges = self.ranges[:to]
+        self.updateTableValues()
+
+    def createRow(self):
+        row = self.tableWidget.rowCount()
+        self.tableWidget.setRowCount(self.tableWidget.rowCount() + 1)
+
+        newItem = QtGui.QTableWidgetItem("item")
+        self.tableWidget.setItem(row, 0, newItem)
+        newItem.setTextAlignment(QtCore.Qt.AlignCenter)
+        newItem.setText("0.0")
+        newItem.setFlags(QtCore.Qt.ItemIsSelectable|QtCore.Qt.ItemIsEditable|QtCore.Qt.ItemIsDragEnabled|
+                         QtCore.Qt.ItemIsDropEnabled|QtCore.Qt.ItemIsUserCheckable)
+
+        newItem = QtGui.QTableWidgetItem("item")
+        self.tableWidget.setItem(row, 1, newItem)
+        newItem.setTextAlignment(QtCore.Qt.AlignCenter)
+        newItem.setText("0.0")
+
+        #import random
+        # r = random.randint(0, 255)
+        # g = random.randint(0, 255)
+        # b = random.randint(0, 255)
+
+        val = int(127 * row / (self.form.editSteps.value() / 2))
+        g = (127 + val) if val <= 127 else 0
+        r = (328 - val if val >= 127 else 0)
+        color = QtGui.QColor(r, g, 0)
+        colorPix = QtGui.QPixmap(16, 16)
+        colorPix.fill(color)
+        self.ranges[row][2] = (color.red()/255, color.green()/255, color.blue()/255)
+        buttonColor = QtGui.QPushButton('')
+        buttonColor.setIcon(QtGui.QIcon(colorPix))
+        buttonColor.setMaximumSize(QtCore.QSize(20, 20))
+        buttonColor.clicked.connect(lambda: self.selColor(buttonColor))
+        self.tableWidget.setCellWidget(row, 2, buttonColor)
+
+    def selColor(self, button):
+        color = QtGui.QColorDialog.getColor()
+        if color.isValid():
+            print("añadir color")
+            colorPix = QtGui.QPixmap(16, 16)
+            colorPix.fill(color)
+            button.setIcon(QtGui.QIcon(colorPix))
+            curentIndex = self.tableWidget.currentIndex()
+            self.ranges[curentIndex.row()][2] = (color.red()/255, color.green()/255, color.blue()/255)
 
 # Contours Analisys: ---------------------------------------------------------------------------------
-class _ContourTaskPanel:
+class _ContourTaskPanel():
     '''The editmode TaskPanel for contours generator'''
 
     def __init__(self):
         self.MinorColor = (0.5, 0.5, 0.5)
         self.MayorColor = (0.5, 0.5, 0.5)
-        self.obj = None
+        land = None
         self.intervals = ["0.1 m", "0.5 m", "1 m", "5 m", "10 m", "50 m", "100 m", "500 m"]
         self.intervalvalues = [0.1, 0.5, 1, 5, 10, 50, 100, 500]
 
@@ -340,8 +418,8 @@ class _ContourTaskPanel:
     def add(self):
         sel = FreeCADGui.Selection.getSelection()
         if len(sel) > 0:
-            self.obj = sel[0]
-            self.lineEdit1.setText(self.obj.Label)
+            land = sel[0]
+            self.lineEdit1.setText(land.Label)
 
     def selColor(self, button):
         color = QtGui.QColorDialog.getColor()
@@ -360,7 +438,7 @@ class _ContourTaskPanel:
             self.MayorColor = col
 
     def accept(self):
-        if self.obj is None:
+        if land is None:
             print("No hay objetos para procesar")
             return False
         else:
@@ -369,18 +447,18 @@ class _ContourTaskPanel:
 
             i = 0
             if i == 0:
-                if self.obj.TypeId == 'Mesh::Feature':
-                    Contours_Mesh(self.obj.Mesh, minor, mayor, self.MinorColor, self.MayorColor,
+                if land.TypeId == 'Mesh::Feature':
+                    Contours_Mesh(land.Mesh, minor, mayor, self.MinorColor, self.MayorColor,
                           self.inputMinorContourThickness.value(), self.inputMayorContourThickness.value())
                 else:
-                    Contours_Part(self.obj, minor, mayor, self.MinorColor, self.MayorColor,
+                    Contours_Part(land, minor, mayor, self.MinorColor, self.MayorColor,
                               self.inputMinorContourThickness.value(), self.inputMayorContourThickness.value())
 
 
             elif i == 1:
                 import multiprocessing
                 p = multiprocessing.Process(target=Contours_Mesh,
-                                            args=(self.obj.Mesh, minor, mayor,
+                                            args=(land.Mesh, minor, mayor,
                                                   self.MinorColor, self.MayorColor,
                                                   self.inputMinorContourThickness.value(),
                                                   self.inputMayorContourThickness.value(), ))
@@ -390,7 +468,7 @@ class _ContourTaskPanel:
             else:
                 import threading
                 hilo = threading.Thread(target = Contours_Mesh,
-                                        args = (self.obj.Mesh, minor, mayor,
+                                        args = (land.Mesh, minor, mayor,
                                                 self.MinorColor, self.MayorColor,
                                                 self.inputMinorContourThickness.value(),
                                                 self.inputMayorContourThickness.value()))
@@ -399,140 +477,42 @@ class _ContourTaskPanel:
 
             return True
 
-
 # Height Analisys: ---------------------------------------------------------------------------------
-class _HeightTaskPanel:
+class _HeightTaskPanel(_generalTaskPanel):
     '''The TaskPanel for Slope setup'''
 
     def __init__(self):
-        self.obj = None
+        _generalTaskPanel.__init__(self)
 
-        # form:
-        self.form = QtGui.QWidget()
-        self.form.resize(800,640)
-        self.form.setWindowTitle("Curvas de nivel")
-        self.form.setWindowIcon(QtGui.QIcon(os.path.join(DirIcons, "contours.svg")))
-        self.grid = QtGui.QGridLayout(self.form)
-
-        # parameters
-        self.labelTerrain = QtGui.QLabel()
-        self.labelTerrain.setText("Terreno:")
-        self.lineEdit1 = QtGui.QLineEdit(self.form)
-        self.lineEdit1.setObjectName(_fromUtf8("lineEdit1"))
-        self.lineEdit1.readOnly = True
-        self.grid.addWidget(self.labelTerrain, self.grid.rowCount(), 0, 1, 1)
-        self.grid.addWidget(self.lineEdit1, self.grid.rowCount() - 1, 1, 1, 1)
-
-        self.buttonAdd = QtGui.QPushButton('+')
-        self.grid.addWidget(self.buttonAdd, self.grid.rowCount() - 1, 2, 1, 1)
-
-        self.line1 = QtGui.QFrame()
-        self.line1.setFrameShape(QtGui.QFrame.HLine)
-        self.line1.setFrameShadow(QtGui.QFrame.Sunken)
-        self.grid.addWidget(self.line1, self.grid.rowCount(), 0, 1, -1)
-
-        # Divisiones ---------------------------------------------------
-        self.labelDivision = QtGui.QLabel()
-        self.labelDivision.setText("Divisiones:")
-        self.grid.addWidget(self.labelDivision, self.grid.rowCount(), 0, 1, 1)
-        self.lineEditDivisions = QtGui.QSpinBox()
-        self.lineEditDivisions.setMinimum(3);
-        self.lineEditDivisions.setMaximum(10);
-        self.grid.addWidget(self.lineEditDivisions, self.grid.rowCount() - 1, 1, 1, -1)
-
-
-        # Title labels ---------------------------------------------------
-        self.widgetDivisions = QtGui.QGroupBox()
-        self.grid.addWidget(self.widgetDivisions, self.grid.rowCount(), 0, 1, -1)
-        self.gridDivisions = QtGui.QGridLayout(self.widgetDivisions)
-        self.labelColor = QtGui.QLabel()
-        self.labelColor.setText("Colores")
-        self.gridDivisions.addWidget(self.labelColor, 0, 0, 1, -1)
-        self.labelMax = QtGui.QLabel()
-        self.labelMax.setText("Max.")
-        self.gridDivisions.addWidget(self.labelMax, 0, 1, 1, -1)
-        self.labelMin = QtGui.QLabel()
-        self.labelMin.setText("Min.")
-        self.gridDivisions.addWidget(self.labelMin, 0, 2, 1, -1)
-        print("  ---- Rows: {a}".format(a=self.gridDivisions.rowCount()))
-
-
-        # buttons add remove colors --------------------------------------------
-
-        #QtCore.QObject.connect(self.buttonAdd, QtCore.SIGNAL("clicked()"), self.add)
-        self.buttonAdd.clicked.connect(self.add)
-        QtCore.QObject.connect(self.lineEditDivisions, QtCore.SIGNAL('valueChanged(int)'), self.addDivision)
-        #self.lineEditDivisions.valueChanged.connect(self.addDivision)
-
-    def addDivision(self):
-        rows = self.gridDivisions.rowCount() - 1
-        print(rows)
-
-        if self.lineEditDivisions.value() > rows:
-            for i in range(0, self.lineEditDivisions.value() - rows):
-                self.createRow()
-        elif self.lineEditDivisions.value() < rows:
-            for i in range(0, rows - self.lineEditDivisions.value()):
-                self.removeRow()
-
-    def removeRow(self):
-        row = self.gridDivisions.rowCount() - 1
-        if row > 3:
-            for col in range(self.gridDivisions.columnCount()):
-                item = self.gridDivisions.itemAtPosition(row, col)
-                if item is not None:
-                    #item.widget().deleteLater()
-                    self.gridDivisions.removeItem(item)
-                    del item
-
-    def createRow(self):
-        import random
-        r = random.randint(0, 255)
-        g = random.randint(0, 255)
-        b = random.randint(0, 255)
-        color = QtGui.QColor(r, g, b)
-        colorPix = QtGui.QPixmap(16, 16)
-        colorPix.fill(color)
-        buttonColor = QtGui.QPushButton('')
-        buttonColor.setIcon(QtGui.QIcon(colorPix))
-        buttonColor.clicked.connect(lambda: self.selColor(buttonColor))
-        self.gridDivisions.addWidget(buttonColor, self.gridDivisions.rowCount(), 0, 1, 1)
-
-        max = QtGui.QSpinBox()
-        max.setMinimum(0)
-        max.setMaximum(100)
-        self.gridDivisions.addWidget(max, self.gridDivisions.rowCount() - 1, 1, 1, 1)
-
-        min = QtGui.QSpinBox()
-        min.setMinimum(0)
-        min.setMaximum(100)
-        self.gridDivisions.addWidget(min, self.gridDivisions.rowCount() - 1, 2, 1, 1)
-
-    def selColor(self, button):
-        color = QtGui.QColorDialog.getColor()
-        colorPix = QtGui.QPixmap(16, 16)
-        colorPix.fill(color)
-        button.setIcon(QtGui.QIcon(colorPix))
-
-    def add(self):
-        sel = FreeCADGui.Selection.getSelection()
-        if len(sel) > 0:
-            self.obj = sel[0]
-            self.lineEdit1.setText(self.obj.Label)
+        # Initial set-up:
+        land = FreeCAD.ActiveDocument.Site.Terrain
+        self.form.editFrom.setSuffix(" m")
+        self.form.editFrom.setValue(land.Shape.BoundBox.ZMin)
+        self.form.editTo.setSuffix(" m")
+        self.form.editTo.setValue(land.Shape.BoundBox.ZMax)
+        self.form.editSteps.setValue(20)
+        self.form.editFrom.valueChanged.connect(self.updateTableValues)
+        self.form.editTo.valueChanged.connect(self.updateTableValues)
 
     def accept(self):
-        if self.obj is None:
-            print("No hay objetos para procesar")
-            return False
-
         from datetime import datetime
         starttime = datetime.now()
 
-        if self.obj.isDerivedFrom("Part::Feature"):
-            escala = (self.obj.Shape.BoundBox.ZMax - self.obj.Shape.BoundBox.ZMin) / 100
+        land = FreeCAD.ActiveDocument.Site.Terrain
+        if land.isDerivedFrom("Part::Feature"):
+            escala = (land.Shape.BoundBox.ZMax - land.Shape.BoundBox.ZMin) / 100
             colorlist = []
-            for face in self.obj.Shape.Faces:
-                zz = (face.CenterOfMass.z - self.obj.Shape.BoundBox.ZMin) / escala
+
+            for face in land.Shape.Faces:
+                zz = (face.CenterOfMass.z - land.Shape.BoundBox.ZMin) / escala
+
+                for rango in self.ranges:
+                    if zz < rango[1]:
+                        colorlist.append(rango[2])
+                        break
+
+            for face in land.Shape.Faces:
+                zz = (face.CenterOfMass.z - land.Shape.BoundBox.ZMin) / escala
 
                 if zz < 20:
                     colorlist.append((0.0, 1.0, 0.0))
@@ -545,18 +525,18 @@ class _HeightTaskPanel:
                 else:
                     colorlist.append((1.0, 0.0, 0.0))
 
-            self.obj.ViewObject.DiffuseColor = colorlist
+            land.ViewObject.DiffuseColor = colorlist
 
-        elif obj.isDerivedFrom("Mesh::Feature"):
-            fMesh = Mest2FemMesh(self.obj)
+        elif land.isDerivedFrom("Mesh::Feature"):
+            fMesh = Mest2FemMesh(land)
             escala = fMesh.FemMesh.BoundBox.ZMax - fMesh.FemMesh.BoundBox.ZMin
 
             import math
             colors={}
             if True:
                 node = 1
-                for point in self.obj.Mesh.Points:
-                    zz = (point.Vector.z - self.obj.Mesh.BoundBox.ZMin) / escala * 100
+                for point in land.Mesh.Points:
+                    zz = (point.Vector.z - land.Mesh.BoundBox.ZMin) / escala * 100
                     # Cambiar esto a la lista de colores configurable
                     if zz < 20:
                         colors[node] = (0.0, 1.0, 0.0)
@@ -571,7 +551,7 @@ class _HeightTaskPanel:
 
                     node += 1
 
-                #    (r, g, b, a) = cmap((point.Vector.z - self.obj.Mesh.BoundBox.ZMin) / escala)
+                #    (r, g, b, a) = cmap((point.Vector.z - land.Mesh.BoundBox.ZMin) / escala)
                 #    colors[node] = (r, g, b)
                 #    node += 1
             else:
@@ -586,254 +566,51 @@ class _HeightTaskPanel:
         print("Orientation analisys OK (", datetime.now() - starttime, ")")
         return True
 
-
 # Slope Analisys: ---------------------------------------------------------------------------------
-class _SlopeTaskPanel:
+class _SlopeTaskPanel(_generalTaskPanel):
     '''The TaskPanel for Slope setup'''
 
     def __init__(self):
-        self.obj = None
+        _generalTaskPanel.__init__(self)
 
-        # form:
-        self.form = QtGui.QWidget()
-        self.form.resize(800, 640)
-        self.form.setWindowTitle("Curvas de nivel")
-        self.form.setWindowIcon(QtGui.QIcon(os.path.join(DirIcons, "contours.svg")))
-        self.grid = QtGui.QGridLayout(self.form)
+        # Initial set-up:
+        self.form.editFrom.setSuffix(" º")
+        self.form.editFrom.setValue(0.0)
+        self.form.editTo.setSuffix(" º")
+        self.form.editTo.setValue(20.0)
+        self.form.editSteps.setValue(10)
+        self.form.editFrom.valueChanged.connect(self.updateTableValues)
+        self.form.editTo.valueChanged.connect(self.updateTableValues)
 
-        # parameters
-        self.labelTerrain = QtGui.QLabel()
-        self.labelTerrain.setText("Terreno:")
-        self.lineEdit1 = QtGui.QLineEdit(self.form)
-        self.lineEdit1.setObjectName(_fromUtf8("lineEdit1"))
-        self.lineEdit1.readOnly = True
-        self.grid.addWidget(self.labelTerrain, self.grid.rowCount(), 0, 1, 1)
-        self.grid.addWidget(self.lineEdit1, self.grid.rowCount() - 1, 1, 1, 1)
-
-        self.buttonAdd = QtGui.QPushButton('+')
-        self.grid.addWidget(self.buttonAdd, self.grid.rowCount() - 1, 2, 1, 1)
-
-        self.line1 = QtGui.QFrame()
-        self.line1.setFrameShape(QtGui.QFrame.HLine)
-        self.line1.setFrameShadow(QtGui.QFrame.Sunken)
-        self.grid.addWidget(self.line1, self.grid.rowCount(), 0, 1, -1)
-
-        # Divisiones ---------------------------------------------------
-        self.labelDivision = QtGui.QLabel()
-        self.labelDivision.setText("Divisiones:")
-        self.grid.addWidget(self.labelDivision, self.grid.rowCount(), 0, 1, 1)
-        self.lineEditDivisions = QtGui.QSpinBox()
-        self.lineEditDivisions.setMinimum(3)
-        self.lineEditDivisions.setMaximum(10)
-        self.grid.addWidget(self.lineEditDivisions, self.grid.rowCount() - 1, 1, 1, -1)
-
-        # Title labels ---------------------------------------------------
-        self.widgetDivisions = QtGui.QGroupBox()
-        self.grid.addWidget(self.widgetDivisions, self.grid.rowCount(), 0, 1, -1)
-        self.gridDivisions = QtGui.QGridLayout(self.widgetDivisions)
-        self.labelColor = QtGui.QLabel()
-        self.labelColor.setText("Colores")
-        self.gridDivisions.addWidget(self.labelColor, 0, 0, 1, -1)
-        self.labelMax = QtGui.QLabel()
-        self.labelMax.setText("Max.")
-        self.gridDivisions.addWidget(self.labelMax, 0, 1, 1, -1)
-        self.labelMin = QtGui.QLabel()
-        self.labelMin.setText("Min.")
-        self.gridDivisions.addWidget(self.labelMin, 0, 2, 1, -1)
-
-        self.tableWidget = QtGui.QTableWidget()
-        self.grid.addWidget(self.tableWidget, self.grid.rowCount(), 0, 1, -1)
-
-        self.tableWidget.verticalHeader().hide()
-        #self.tableWidget.setShowGrid(False)
-        #self.tableWidget.setRowCount(4)
-        self.tableWidget.setColumnCount(3)
-        self.tableWidget.setHorizontalHeaderLabels(["Ángulo min. (º)", "Ángulo máx. (º)", "Color"])
-
-
-        for i in range(3):
-            self.createRow()
-
-        print("  ---- Rows: {a}".format(a=self.gridDivisions.rowCount()), "\n")
-
-        # buttons add remove colors --------------------------------------------
-
-        # QtCore.QObject.connect(self.buttonAdd, QtCore.SIGNAL("clicked()"), self.add)
-        self.buttonAdd.clicked.connect(self.add)
-        QtCore.QObject.connect(self.lineEditDivisions, QtCore.SIGNAL('valueChanged(int)'), self.changeDivision)
-        # self.lineEditDivisions.valueChanged.connect(self.addDivision)
-
-    def changeDivision(self):
-        rows = self.tableWidget.rowCount()
-        to = self.lineEditDivisions.value()
-
-        maxval = float(self.tableWidget.item(self.tableWidget.rowCount() - 1, 1).text())
-
-        if to > rows:
-            for i in range(0, to - rows):
-                self.createRow()
-        elif to < rows:
-            self.tableWidget.setRowCount(to)
-            #for i in range(0, rows - to):
-            #    self.removeRow()
-
-        ran = maxval / self.tableWidget.rowCount()
-        for i in range(self.tableWidget.rowCount()):
-            item = self.tableWidget.item(i, 0)
-            item.setText('{:.1f}'.format(ran *  i))
-            item = self.tableWidget.item(i, 1)
-            item.setText('{:.1f}'.format(ran *  (i + 1)))
-
-
-        return
-        rows = self.gridDivisions.rowCount() - 1
-        print(rows)
-
-        if self.lineEditDivisions.value() > rows:
-            for i in range(0, self.lineEditDivisions.value() - rows):
-                self.createRow()
-        elif self.lineEditDivisions.value() < rows:
-            for i in range(0, rows - self.lineEditDivisions.value()):
-                self.removeRow()
-
-    def removeRow(self):
-
-
-        return
-        row = self.gridDivisions.rowCount() - 1
-        if row > 3:
-            for col in range(self.gridDivisions.columnCount()):
-                item = self.gridDivisions.itemAtPosition(row, col)
-                if item is not None:
-                    # item.widget().deleteLater()
-                    self.gridDivisions.removeItem(item)
-                    del item
-
-    def createRow(self):
-        row = self.tableWidget.rowCount()
-        self.tableWidget.setRowCount(self.tableWidget.rowCount() + 1)
-
-        newItem = QtGui.QTableWidgetItem("item")
-        self.tableWidget.setItem(row, 0, newItem)
-        newItem.setTextAlignment(QtCore.Qt.AlignCenter)
-        newItem.setText("0.0")
-
-        newItem = QtGui.QTableWidgetItem("item")
-        self.tableWidget.setItem(row, 1, newItem)
-        newItem.setTextAlignment(QtCore.Qt.AlignCenter)
-        newItem.setText("0.0")
-
-        '''
-        comBox = QtGui.QComboBox()
-        comBox.addItem("男")
-        comBox.addItem("女")
-        comBox.setStyleSheet("QComboBox{margin:3px};")
-        tableWidget.setCellWidget(0, 1, comBox)
-        '''
-
-        import random
-        r = random.randint(0, 255)
-        g = random.randint(0, 255)
-        b = random.randint(0, 255)
-        color = QtGui.QColor(r, g, b)
-        colorPix = QtGui.QPixmap(16, 16)
-        colorPix.fill(color)
-        buttonColor = QtGui.QPushButton('')
-        buttonColor.setIcon(QtGui.QIcon(colorPix))
-        buttonColor.clicked.connect(lambda: self.selColor(buttonColor))
-        '''
-        searchBtn = QtGui.QPushButton("修改")
-        searchBtn.setDown(True)
-        searchBtn.setStyleSheet("QPushButton{margin:3px};")
-        '''
-        self.tableWidget.setCellWidget(row, 2, buttonColor)
-
-        return
-        import random
-        r = random.randint(0, 255)
-        g = random.randint(0, 255)
-        b = random.randint(0, 255)
-        color = QtGui.QColor(r, g, b)
-        colorPix = QtGui.QPixmap(16, 16)
-        colorPix.fill(color)
-        buttonColor = QtGui.QPushButton('')
-        buttonColor.setIcon(QtGui.QIcon(colorPix))
-        buttonColor.clicked.connect(lambda: self.selColor(buttonColor))
-        self.gridDivisions.addWidget(buttonColor, self.gridDivisions.rowCount(), 0, 1, 1)
-
-        max = QtGui.QSpinBox()
-        max.setMinimum(0)
-        max.setMaximum(100)
-        self.gridDivisions.addWidget(max, self.gridDivisions.rowCount() - 1, 1, 1, 1)
-
-        min = QtGui.QSpinBox()
-        min.setMinimum(0)
-        min.setMaximum(100)
-        self.gridDivisions.addWidget(min, self.gridDivisions.rowCount() - 1, 2, 1, 1)
-
-    def selColor(self, button):
-        color = QtGui.QColorDialog.getColor()
-        colorPix = QtGui.QPixmap(16, 16)
-        colorPix.fill(color)
-        button.setIcon(QtGui.QIcon(colorPix))
-
-    def add(self):
-        sel = FreeCADGui.Selection.getSelection()
-        if len(sel) > 0:
-            self.obj = sel[0]
-            self.lineEdit1.setText(self.obj.Label)
-            print(self.obj.Label)
-
-    def getFaceSlope(self, obj):
-        import Mesh
-        import math
-
-        setColors = []
-        for face in obj.Mesh.Facets:
-            normal = face.Normal
-            deg = normal.getAngle(FreeCAD.Vector(0, 0, 1))
-            angle = math.degrees(deg)
-            print(angle)
-            # slope = math.tanh(deg)
-            # print (slope)
-
-    def getPointSlope(self):
+    def getPointSlope(self, ranges = None):
         from datetime import datetime
         starttime = datetime.now()
         import math
 
-        if self.obj.isDerivedFrom("Part::Feature"):
+        land = FreeCAD.ActiveDocument.Site.Terrain
+        if land.isDerivedFrom("Part::Feature"):
             colorlist = []
 
-            # ejempo. Se sustituiría por una lista con la configuración real:
-            rangos = [[0, 5, (0.0, 1.0, 0.0)],
-                      [5, 7.5, (0.0, 0.8, 0.0)],
-                      [7.5, 10, (0.0, 0.6, 0.0)],
-                      [10, 12.5, (0.0, 0.5, 0.0)],
-                      [12.5, 14, (1.0, 0.5, 0.0)],
-                      [14, 20, (1.0, 0.0, 0.0)],
-                      [20, 90, (0.6, 0.0, 0.0)]
-                      ]
-
-            for face in self.obj.Shape.Faces:
+            for face in land.Shape.Faces:
                 normal = face.normalAt(0, 0)
                 rad = normal.getAngle(FreeCAD.Vector(0, 0, 1))
                 angle = math.degrees(rad)
 
-                for rango in rangos:
+                for rango in ranges:
                     if angle < rango[1]:
                         colorlist.append(rango[2])
                         break
 
-            self.obj.ViewObject.DiffuseColor = colorlist
+            land.ViewObject.DiffuseColor = colorlist
 
+        # TODO: check this code:
         elif obj.isDerivedFrom("Mesh::Feature"):
-            fMesh = Mest2FemMesh(self.obj)
+            fMesh = Mest2FemMesh(land)
 
             import math
             setColors = []
             i = 1
-            normals = self.obj.Mesh.getPointNormals()
+            normals = land.Mesh.getPointNormals()
             for normal in normals:
                 rad = normal.getAngle(FreeCAD.Vector(0, 0, 1))
                 angle = math.degrees(rad)
@@ -860,207 +637,40 @@ class _SlopeTaskPanel:
         FreeCAD.activeDocument().recompute()
         print("Everything OK (", datetime.now() - starttime, ")")
 
-    def getPointsFromMesh(self):
-        import csv
-        import numpy as np
-        import matplotlib.mlab as ml
-        import scipy as sp
-        import scipy.interpolate
-
-        x = []
-        y = []
-        z = []
-        for point in self.obj.Mesh.Points:
-            x.append(point.x / 1000)
-            y.append(point.y / 1000)
-            z.append(point.z / 1000)
-
-        x = np.array(x)
-        y = np.array(y)
-        z = np.array(z)
-
-        spline = sp.interpolate.Rbf(x, y, z, function='thin-plate')
-        return
-        xi = np.linspace(min(x), max(x))
-        yi = np.linspace(min(y), max(y))
-        X, Y = np.meshgrid(xi, yi)
-        Z = spline(X, Y)
-
-        return
-
-        print(X)
-        xx = X.flatten()
-        yy = Y.flatten()
-        zz = Z.flatten()
-
-        return xx, yy, zz
-        '''
-        i = 0
-        pts = []
-        for point in xx:
-            pts.append(FreeCAD.Vector(xx[i] * 1000, yy[i] * 1000, zz[i] * 1000))
-            i += 1
-
-        PointObject.addPoints(pts)
-        PointGroup.Points = PointObject
-        '''
-
     def accept(self):
-        print("Accept")
-        if self.obj is None:
-            print("No hay objetos para procesar")
-            return False
-        else:
-            # self.getPointSlope()
-            import threading
-            hilo = threading.Thread(target=self.getPointSlope())
-            hilo.start()
-            return True
+        # self.getPointSlope()
+        import threading
+        hilo = threading.Thread(target=self.getPointSlope(self.ranges))
+        hilo.start()
+        return True
 
 # Orientation Analisys: ---------------------------------------------------------------------------------
-class _OrientationTaskPanel:
+class _OrientationTaskPanel(_generalTaskPanel):
     '''The TaskPanel for Orientation setup'''
 
     def __init__(self):
-        self.obj = None
+        _generalTaskPanel.__init__(self)
 
-        # form:
-        self.form = QtGui.QWidget()
-        self.form.resize(800,640)
-        self.form.setWindowTitle("Curvas de nivel")
-        self.form.setWindowIcon(QtGui.QIcon(os.path.join(DirIcons, "contours.svg")))
-        self.grid = QtGui.QGridLayout(self.form)
-
-        # parameters
-        self.labelTerrain = QtGui.QLabel()
-        self.labelTerrain.setText("Terreno:")
-        self.lineEdit1 = QtGui.QLineEdit(self.form)
-        self.lineEdit1.setObjectName(_fromUtf8("lineEdit1"))
-        self.lineEdit1.readOnly = True
-        self.grid.addWidget(self.labelTerrain, self.grid.rowCount(), 0, 1, 1)
-        self.grid.addWidget(self.lineEdit1, self.grid.rowCount() - 1, 1, 1, 1)
-
-        self.buttonAdd = QtGui.QPushButton('+')
-        self.grid.addWidget(self.buttonAdd, self.grid.rowCount() - 1, 2, 1, 1)
-
-        self.line1 = QtGui.QFrame()
-        self.line1.setFrameShape(QtGui.QFrame.HLine)
-        self.line1.setFrameShadow(QtGui.QFrame.Sunken)
-        self.grid.addWidget(self.line1, self.grid.rowCount(), 0, 1, -1)
-
-        # Divisiones ---------------------------------------------------
-        self.labelDivision = QtGui.QLabel()
-        self.labelDivision.setText("Divisiones:")
-        self.grid.addWidget(self.labelDivision, self.grid.rowCount(), 0, 1, 1)
-        self.lineEditDivisions = QtGui.QSpinBox()
-        self.lineEditDivisions.setMinimum(3);
-        self.lineEditDivisions.setMaximum(10);
-        self.grid.addWidget(self.lineEditDivisions, self.grid.rowCount() - 1, 1, 1, -1)
-
-
-        # Title labels ---------------------------------------------------
-        self.widgetDivisions = QtGui.QGroupBox()
-        self.grid.addWidget(self.widgetDivisions, self.grid.rowCount(), 0, 1, -1)
-        self.gridDivisions = QtGui.QGridLayout(self.widgetDivisions)
-        self.labelColor = QtGui.QLabel()
-        self.labelColor.setText("Colores")
-        self.gridDivisions.addWidget(self.labelColor, 0, 0, 1, -1)
-        self.labelMax = QtGui.QLabel()
-        self.labelMax.setText("Max.")
-        self.gridDivisions.addWidget(self.labelMax, 0, 1, 1, -1)
-        self.labelMin = QtGui.QLabel()
-        self.labelMin.setText("Min.")
-        self.gridDivisions.addWidget(self.labelMin, 0, 2, 1, -1)
-        print("  ---- Rows: {a}".format(a=self.gridDivisions.rowCount()))
-
-
-        # buttons add remove colors --------------------------------------------
-
-        #QtCore.QObject.connect(self.buttonAdd, QtCore.SIGNAL("clicked()"), self.add)
-        self.buttonAdd.clicked.connect(self.add)
-        QtCore.QObject.connect(self.lineEditDivisions, QtCore.SIGNAL('valueChanged(int)'), self.addDivision)
-        #self.lineEditDivisions.valueChanged.connect(self.addDivision)
-
-    def addDivision(self):
-        rows = self.gridDivisions.rowCount() - 1
-        print(rows)
-
-        if self.lineEditDivisions.value() > rows:
-            for i in range(0, self.lineEditDivisions.value() - rows):
-                self.createRow()
-        elif self.lineEditDivisions.value() < rows:
-            for i in range(0, rows - self.lineEditDivisions.value()):
-                self.removeRow()
-
-    def removeRow(self):
-        row = self.gridDivisions.rowCount() - 1
-        if row > 3:
-            for col in range(self.gridDivisions.columnCount()):
-                item = self.gridDivisions.itemAtPosition(row, col)
-                if item is not None:
-                    #item.widget().deleteLater()
-                    self.gridDivisions.removeItem(item)
-                    del item
-
-    def createRow(self):
-        import random
-        r = random.randint(0, 255)
-        g = random.randint(0, 255)
-        b = random.randint(0, 255)
-        color = QtGui.QColor(r, g, b)
-        colorPix = QtGui.QPixmap(16, 16)
-        colorPix.fill(color)
-        buttonColor = QtGui.QPushButton('')
-        buttonColor.setIcon(QtGui.QIcon(colorPix))
-        buttonColor.clicked.connect(lambda: self.selColor(buttonColor))
-        self.gridDivisions.addWidget(buttonColor, self.gridDivisions.rowCount(), 0, 1, 1)
-
-        max = QtGui.QSpinBox()
-        max.setMinimum(0)
-        max.setMaximum(100)
-        self.gridDivisions.addWidget(max, self.gridDivisions.rowCount() - 1, 1, 1, 1)
-
-        min = QtGui.QSpinBox()
-        min.setMinimum(0)
-        min.setMaximum(100)
-        self.gridDivisions.addWidget(min, self.gridDivisions.rowCount() - 1, 2, 1, 1)
-
-    def selColor(self, button):
-        color = QtGui.QColorDialog.getColor()
-        colorPix = QtGui.QPixmap(16, 16)
-        colorPix.fill(color)
-        button.setIcon(QtGui.QIcon(colorPix))
-
-    def add(self):
-        sel = FreeCADGui.Selection.getSelection()
-        if len(sel) > 0:
-            self.obj = sel[0]
-            self.lineEdit1.setText(self.obj.Label)
+        # Initial set-up:
+        self.form.editFrom.setSuffix(" º")
+        self.form.editFrom.setValue(0.0)
+        self.form.editTo.setSuffix(" º")
+        self.form.editTo.setMaximum(360.0)
+        self.form.editTo.setValue(360.0)
+        self.form.editSteps.setValue(15)
+        self.form.editFrom.valueChanged.connect(self.updateTableValues)
+        self.form.editTo.valueChanged.connect(self.updateTableValues)
 
     def accept(self):
-        if self.obj is None:
-            print("No hay objetos para procesar")
-            return False
-
         import math
         from datetime import datetime
         starttime = datetime.now()
 
-        if self.obj.isDerivedFrom("Part::Feature"):
+        land = FreeCAD.ActiveDocument.Site.Terrain
+        if land.isDerivedFrom("Part::Feature"):
             colorlist = []
 
-            # ejempo. Se sustituiría por una lista con la configuración real:
-            rangos = [[  0,  45, (0.0, 0.0, 0.0)],
-                      [ 45,  90, (0.0, 0.0, 1.0)],
-                      [ 90, 135, (0.0, 1.0, 0.0)],
-                      [135, 180, (0.0, 1.0, 1.0)],
-                      [180, 225, (1.0, 0.0, 0.0)],
-                      [225, 270, (1.0, 0.0, 1.0)],
-                      [270, 315, (1.0, 1.0, 0.0)],
-                      [315, 360, (1.0, 1.0, 1.0)]
-                     ]
-
-            for face in self.obj.Shape.Faces:
+            for face in land.Shape.Faces:
                 normal = face.normalAt(0, 0)
                 normal.z = 0
                 anglex = math.degrees(normal.getAngle(FreeCAD.Vector(1, 0, 0)))
@@ -1068,46 +678,21 @@ class _OrientationTaskPanel:
                 if angley >= 90:
                     anglex = 360.0 - anglex
 
-                #anglex /= 2
-                gray = anglex / 360.0
-                colorlist.append((gray, gray, gray))
-                continue
-
-                for rango in rangos:
+                for rango in self.ranges:
                     if anglex < rango[1]:
                         colorlist.append(rango[2])
                         break
+            land.ViewObject.DiffuseColor = colorlist
 
-                '''
-                if anglex < 45:
-                    colorlist.append((0.0, 0.0, 0.0))
-                elif anglex < 90:
-                    colorlist.append((0.0, 0.0, 1.0))
-                elif anglex < 135:
-                    colorlist.append((0.0, 1.0, 1.0))
-                elif anglex < 180:
-                    colorlist.append((1.0, 0.0, 0.0))
-                elif anglex < 225:
-                    colorlist.append((1.0, 0.0, 1.0))
-                elif anglex < 270:
-                    colorlist.append((1.0, 1.0, 0.0))
-                elif anglex < 315:
-                    colorlist.append((1.0, 1.0, 1.0))
-                else:
-                    colorlist.append((0.5, 0.5, 0.5))
-                '''
-
-            print(" Colores:\n", colorlist)
-            self.obj.ViewObject.DiffuseColor = colorlist
-
-        elif obj.isDerivedFrom("Mesh::Feature"):
-            fMesh = Mest2FemMesh(self.obj)
+        # TODO: check this code:
+        elif land.isDerivedFrom("Mesh::Feature"):
+            fMesh = Mest2FemMesh(land)
             import Mesh
-            fMesh = Mest2FemMesh(self.obj)
+            fMesh = Mest2FemMesh(land)
 
             setColors = {}
             i = 1
-            normals = self.obj.Mesh.getPointNormals()
+            normals = land.Mesh.getPointNormals()
             print("   ---------   time to FEMMESH:  (", datetime.now() - starttime, ")")
 
             for normal in normals:
@@ -1136,10 +721,8 @@ class _OrientationTaskPanel:
         print("Everything OK (", datetime.now() - starttime, ")")
         return True
 
-
-
-## Comandos ----------------------------------------------------------------------------------------------------------
-## 1. Contornos:
+## Commands ----------------------------------------------------------------------------------------------------------
+## 1. Contours:
 class _CommandContours:
     def GetResources(self):
         return {'Pixmap': str(os.path.join(DirIcons, "TerrainContours.svg")),
@@ -1182,7 +765,7 @@ class _CommandSlopeAnalisys:
         self.TaskPanel = _SlopeTaskPanel()
         FreeCADGui.Control.showDialog(self.TaskPanel)
 
-## 3. Altura:
+## 3. Height:
 class _CommandHeightAnalisys:
     def GetResources(self):
         return {'Pixmap': str(os.path.join(DirIcons, "TerrainHeight.svg")),
@@ -1215,8 +798,7 @@ class _CommandOrientationAnalisys:
         self.TaskPanel = _OrientationTaskPanel()
         FreeCADGui.Control.showDialog(self.TaskPanel)
 
-
-# 5. Unión
+## 5. Commands
 if FreeCAD.GuiUp:
     class CommandTerrainAnalisysGroup:
 
