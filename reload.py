@@ -24,17 +24,16 @@ class _CommandReload:
                 'ToolTip': QT_TRANSLATE_NOOP("Reload","Reload")}
 
     def Activated(self):
-        import PVPlantPlacement, PVPlantForms, PVPlant_Import, \
+        import PVPlantPlacement, \
             PVPlantGeoreferencing, PVPlantImportGrid, PVPlantTerrainAnalisys, \
             PVPlantSite, PVPlantRack, PVPlantFence, PVPlantCreateTerrainMesh, \
             PVPlantFoundation, PVPlantTreeGenerator, exportPVSyst, \
             PVPlantTrench, PVPEarthWorks, PVPlantBOQFrames, PVPlantStringBox, PVPlantCable, PVPlantPad, \
-            PVPlantRoad
+            PVPlantRoad, PVPlantTerrain
         #from  Lib import GoogleMapDownloader
 
         import importlib
         importlib.reload(PVPlantPlacement)
-        importlib.reload(PVPlantForms)
         importlib.reload(PVPlantImportGrid)
         importlib.reload(PVPlantGeoreferencing)
         importlib.reload(PVPlantTerrainAnalisys)
@@ -52,7 +51,7 @@ class _CommandReload:
         importlib.reload(PVPlantCable)
         importlib.reload(PVPlantPad)
         importlib.reload(PVPlantRoad)
-
+        importlib.reload(PVPlantTerrain)
 
         #importlib.reload(GoogleMapDownloader)
         print("Reload modules...")

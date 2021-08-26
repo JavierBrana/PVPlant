@@ -250,6 +250,12 @@ class _generalTaskPanel:
         self.form = FreeCADGui.PySideUic.loadUi(os.path.dirname(__file__) + "/PVPlantTerrainAnalisys.ui")
         self.tableWidget = self.form.tableWidget
         self.form.editSteps.valueChanged.connect(self.changeDivision)
+        self.tableWidget.itemChanged.connect(self.cellChanged)
+
+    def cellChanged(self, item):
+        if (item.column() == 1) and (item.row() != (self.tableWidget.rowCount() - 1)):
+            item2 = self.tableWidget.item(item.row() + 1, 0)
+            item2.setText(item.text())
 
     def updateTableValues(self):
         maxval = self.form.editTo.value() - self.form.editFrom.value()
@@ -258,14 +264,15 @@ class _generalTaskPanel:
         for i in range(self.tableWidget.rowCount()):
             for j in range(2):
                 item = self.tableWidget.item(i, j)
-                val = ran * (i + j)
+                val = ran * (i + j) + self.form.editFrom.value()
                 item.setText('{:.1f}'.format(val))
                 self.ranges[i][j] = val
 
-        self.tableWidget.item(0, 0).setText('{:.1f}'.format(self.form.editFrom.value()))
-        self.tableWidget.item(self.tableWidget.rowCount() - 1, 1).setText('{:.1f}'.format(self.form.editTo.value()))
+        #self.tableWidget.item(0, 0).setText('{:.1f}'.format(self.form.editFrom.value()))
+        #self.tableWidget.item(self.tableWidget.rowCount() - 1, 1).setText('{:.1f}'.format(self.form.editTo.value()))
 
     def changeDivision(self):
+        self.tableWidget.blockSignals(True)
         rows = self.tableWidget.rowCount()
         to = self.form.editSteps.value()
         if to > rows:
@@ -276,6 +283,7 @@ class _generalTaskPanel:
             self.tableWidget.setRowCount(to)
             self.ranges = self.ranges[:to]
         self.updateTableValues()
+        self.tableWidget.blockSignals(False)
 
     def createRow(self):
         row = self.tableWidget.rowCount()
@@ -487,83 +495,27 @@ class _HeightTaskPanel(_generalTaskPanel):
         # Initial set-up:
         land = FreeCAD.ActiveDocument.Site.Terrain
         self.form.editFrom.setSuffix(" m")
-        self.form.editFrom.setValue(land.Shape.BoundBox.ZMin)
+        self.form.editFrom.setValue(land.Shape.BoundBox.ZMin / 1000)
         self.form.editTo.setSuffix(" m")
-        self.form.editTo.setValue(land.Shape.BoundBox.ZMax)
-        self.form.editSteps.setValue(20)
+        self.form.editTo.setValue(land.Shape.BoundBox.ZMax / 1000)
+        self.form.editSteps.setValue(10)
         self.form.editFrom.valueChanged.connect(self.updateTableValues)
         self.form.editTo.valueChanged.connect(self.updateTableValues)
 
     def accept(self):
-        from datetime import datetime
-        starttime = datetime.now()
-
         land = FreeCAD.ActiveDocument.Site.Terrain
         if land.isDerivedFrom("Part::Feature"):
-            escala = (land.Shape.BoundBox.ZMax - land.Shape.BoundBox.ZMin) / 100
             colorlist = []
-
             for face in land.Shape.Faces:
-                zz = (face.CenterOfMass.z - land.Shape.BoundBox.ZMin) / escala
-
-                for rango in self.ranges:
-                    if zz < rango[1]:
-                        colorlist.append(rango[2])
+                zz = face.CenterOfMass.z / 1000
+                color = (.0, .0, .0)
+                for i in range(1,len(self.ranges)):
+                    if self.ranges[i][0] <= zz <= self.ranges[i][1]:
+                        color = self.ranges[i][2]
                         break
-
-            for face in land.Shape.Faces:
-                zz = (face.CenterOfMass.z - land.Shape.BoundBox.ZMin) / escala
-
-                if zz < 20:
-                    colorlist.append((0.0, 1.0, 0.0))
-                elif zz < 40:
-                    colorlist.append((0.0, 1.0, 1.0))
-                elif zz < 60:
-                    colorlist.append((0.0, 0.0, 1.0))
-                elif zz < 80:
-                    colorlist.append((1.0, 0.0, 1.0))
-                else:
-                    colorlist.append((1.0, 0.0, 0.0))
-
+                colorlist.append(color)
             land.ViewObject.DiffuseColor = colorlist
-
-        elif land.isDerivedFrom("Mesh::Feature"):
-            fMesh = Mest2FemMesh(land)
-            escala = fMesh.FemMesh.BoundBox.ZMax - fMesh.FemMesh.BoundBox.ZMin
-
-            import math
-            colors={}
-            if True:
-                node = 1
-                for point in land.Mesh.Points:
-                    zz = (point.Vector.z - land.Mesh.BoundBox.ZMin) / escala * 100
-                    # Cambiar esto a la lista de colores configurable
-                    if zz < 20:
-                        colors[node] = (0.0, 1.0, 0.0)
-                    elif (zz < 40):
-                        colors[node] = (0.0, 1.0, 1.0)
-                    elif (zz < 60):
-                        colors[node] = (0.0, 0.0, 1.0)
-                    elif (zz < 80):
-                        colors[node] = (1.0, 0.0, 1.0)
-                    else:
-                        colors[node] = (1.0, 0.0, 0.0)
-
-                    node += 1
-
-                #    (r, g, b, a) = cmap((point.Vector.z - land.Mesh.BoundBox.ZMin) / escala)
-                #    colors[node] = (r, g, b)
-                #    node += 1
-            else:
-                # trabajar con FemMesh es desesperadamente lento:
-                for node in fMesh.FemMesh.Nodes:
-                    (r, g, b, a) = cmap((fMesh.FemMesh.Nodes[node].z - fMesh.FemMesh.BoundBox.ZMin)/escala)
-                    colors[node] = (r, g, b)
-
-            fMesh.ViewObject.NodeColor = colors
-
         FreeCAD.activeDocument().recompute()
-        print("Orientation analisys OK (", datetime.now() - starttime, ")")
         return True
 
 # Slope Analisys: ---------------------------------------------------------------------------------
@@ -573,14 +525,28 @@ class _SlopeTaskPanel(_generalTaskPanel):
     def __init__(self):
         _generalTaskPanel.__init__(self)
 
+        self.angles = self.getAngles()
+
         # Initial set-up:
         self.form.editFrom.setSuffix(" º")
-        self.form.editFrom.setValue(0.0)
+        self.form.editFrom.setValue(0)
         self.form.editTo.setSuffix(" º")
-        self.form.editTo.setValue(20.0)
+        self.form.editTo.setValue(max(self.angles))
         self.form.editSteps.setValue(10)
         self.form.editFrom.valueChanged.connect(self.updateTableValues)
         self.form.editTo.valueChanged.connect(self.updateTableValues)
+
+    def getAngles(self):
+        import math
+        land = FreeCAD.ActiveDocument.Site.Terrain
+        angles = []
+        for face in land.Shape.Faces:
+            normal = face.normalAt(0, 0)
+            rad = normal.getAngle(FreeCAD.Vector(0, 0, 1))
+            angle = math.degrees(rad)
+            angles.append(angle)
+        return angles
+
 
     def getPointSlope(self, ranges = None):
         from datetime import datetime
@@ -590,17 +556,19 @@ class _SlopeTaskPanel(_generalTaskPanel):
         land = FreeCAD.ActiveDocument.Site.Terrain
         if land.isDerivedFrom("Part::Feature"):
             colorlist = []
-
             for face in land.Shape.Faces:
                 normal = face.normalAt(0, 0)
                 rad = normal.getAngle(FreeCAD.Vector(0, 0, 1))
                 angle = math.degrees(rad)
-
-                for rango in ranges:
-                    if angle < rango[1]:
-                        colorlist.append(rango[2])
+                if(angle > 90):
+                    angle -= 90
+                color = (1.0, 1.0, 1.0)
+                for i in range(0, len(ranges)):
+                    if ranges[i][0] <= angle <= ranges[i][1]:
+                        color = ranges[i][2]
                         break
-
+                colorlist.append(color)
+            print(len(land.Shape.Faces) == len(colorlist))
             land.ViewObject.DiffuseColor = colorlist
 
         # TODO: check this code:
@@ -651,6 +619,8 @@ class _OrientationTaskPanel(_generalTaskPanel):
     def __init__(self):
         _generalTaskPanel.__init__(self)
 
+        self.getAngles()
+
         # Initial set-up:
         self.form.editFrom.setSuffix(" º")
         self.form.editFrom.setValue(0.0)
@@ -661,15 +631,31 @@ class _OrientationTaskPanel(_generalTaskPanel):
         self.form.editFrom.valueChanged.connect(self.updateTableValues)
         self.form.editTo.valueChanged.connect(self.updateTableValues)
 
+    def getAngles(self):
+        import math
+        land = FreeCAD.ActiveDocument.Site.Terrain
+        anglesx = []
+        anglesy = []
+        for face in land.Shape.Faces:
+            normal = face.normalAt(0, 0)
+            normal.z = 0
+            anglesx.append(math.degrees(normal.getAngle(FreeCAD.Vector(1, 0, 0))))
+            anglesy.append(math.degrees(normal.getAngle(FreeCAD.Vector(0, 1, 0))))
+
+        print("Min x: ", min(anglesx), " y: ", min(anglesy))
+        print("Max x: ", max(anglesx), " y: ", max(anglesy))
+        return anglesx, anglesy
+
     def accept(self):
         import math
         from datetime import datetime
         starttime = datetime.now()
 
         land = FreeCAD.ActiveDocument.Site.Terrain
+        print(land)
         if land.isDerivedFrom("Part::Feature"):
             colorlist = []
-
+            j = 0
             for face in land.Shape.Faces:
                 normal = face.normalAt(0, 0)
                 normal.z = 0
@@ -678,10 +664,14 @@ class _OrientationTaskPanel(_generalTaskPanel):
                 if angley >= 90:
                     anglex = 360.0 - anglex
 
-                for rango in self.ranges:
-                    if anglex < rango[1]:
-                        colorlist.append(rango[2])
+                print(anglex, " ", angley)
+                for i in range(1, len(self.ranges)):
+                    if self.ranges[i][0] <= anglex <= self.ranges[i][1]:
+                        colorlist.append(self.ranges[i][2])
                         break
+                j += 1
+                if j == 100:
+                    break
             land.ViewObject.DiffuseColor = colorlist
 
         # TODO: check this code:

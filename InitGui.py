@@ -17,10 +17,10 @@ class PVPlantWorkbench (Workbench):
 
         # Mias
         import PVPlantGeoreferencing,  PVPlantRack, PVPlantPlacement, \
-            PVPlant_Import, PVPlantTerrainAnalisys, PVPlantSite, PVPlantImportGrid,PVPlantFence,\
+            PVPlantTerrainAnalisys, PVPlantSite, PVPlantImportGrid,PVPlantFence,\
             PVPlantFoundation, PVPlantCreateTerrainMesh, \
             PVPlantTreeGenerator, exportPVSyst, PVPlantTrench, PVPEarthWorks, PVPlantBOQFrames, \
-            PVPlantStringBox, PVPlantCable, PVPlantPad, PVPlantRoad, \
+            PVPlantStringBox, PVPlantCable, PVPlantPad, PVPlantRoad, PVPlantTerrain, \
             reload
 
         # A list of command names created in the line above
@@ -28,6 +28,7 @@ class PVPlantWorkbench (Workbench):
                      "PVPlantSite",
                      "PVPlantGeoreferencing",
                      #"ImportGrid",
+                     "Terrain",
                      "PointsGroup",
                      "PVPlantCreateTerrainMesh",
                      "TerrainAnalisys",

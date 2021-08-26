@@ -31,7 +31,8 @@ L.control.scale().addTo(map);
 
 var marker;
 var MyApp;
-new QWebChannel(qt.webChannelTransport, function (channel) {
+new QWebChannel(qt.webChannelTransport, function (channel) 
+{
     MyApp = channel.objects.MyApp;
 });
 
@@ -42,7 +43,8 @@ new QWebChannel(qt.webChannelTransport, function (channel) {
 	MyApp.onMapMove(e.latlng.lat, e.latlng.lng)
 });*/
 
-map.on('mousemove', function(e){
+map.on('mousemove', function(e)
+{
 	MyApp.onMapMove(e.latlng.lat, e.latlng.lng)
 });
 
@@ -107,6 +109,7 @@ var kmlcontrol = L.Control.fileLayerLoad({
 		'.geojson',
 		'.json',
 		'.kml',
+		'.kmz',
 		'.gpx'
 	]
 }).addTo(map);
