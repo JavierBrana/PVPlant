@@ -149,7 +149,7 @@ class _Terrain(ArchComponent.Component):
                         "Surface",
                         "Load a ASC file to generate the surface")
 
-        obj.addProperty("App::PropertyFile",
+        obj.addProperty("App::PropertyLink",
                         "PointsGroup",
                         "Surface",
                         "Use a Point Group to generate the surface")
@@ -173,7 +173,7 @@ class _Terrain(ArchComponent.Component):
 
     def __setstate__(self, state):
         if state:
-            self.Type = stat
+            self.Type = state
 
     def onChanged(self, obj, prop):
         '''Do something when a property has changed'''
@@ -210,44 +210,42 @@ class _Terrain(ArchComponent.Component):
                 x = cellsize * np.arange(nx)[0::coarse_factor] + xllcorner
                 y = cellsize * np.arange(ny)[-1::-1][0::coarse_factor] + yllcorner
 
-                site = PVPlantSite.get()
-                if obj.CuttingBoundary:
-                    inc_x = obj.CuttingBoundary.Shape.BoundBox.XLength * 0.05
-                    inc_y = obj.CuttingBoundary.Shape.BoundBox.YLength * 0.05
+                # remove points out of area
+                # 1. coarse:
+                inc_x = obj.CuttingBoundary.Shape.BoundBox.XLength * 0.0
+                inc_y = obj.CuttingBoundary.Shape.BoundBox.YLength * 0.0
 
-                    min_x = 0
-                    max_x = 0
+                min_x = 0
+                max_x = 0
+                comp = (obj.CuttingBoundary.Shape.BoundBox.XMin - inc_x) / 1000
+                for i in range(nx):
+                    if x[i] > comp:
+                        min_x = i - 1
+                        break
+                comp = (obj.CuttingBoundary.Shape.BoundBox.XMax + inc_x) / 1000
+                for i in range(min_x, nx):
+                    if x[i] > comp:
+                        max_x = i
+                        break
 
-                    comp = (obj.CuttingBoundary.Shape.BoundBox.XMin - inc_x) / 1000
-                    for i in range(nx):
-                        if x[i] > comp:
-                            min_x = i - 1
-                            break
-                    comp = (obj.CuttingBoundary.Shape.BoundBox.XMax + inc_x) / 1000
-                    for i in range(min_x, nx):
-                        if x[i] > comp:
-                            max_x = i
-                            break
+                min_y = 0
+                max_y = 0
+                comp = (obj.CuttingBoundary.Shape.BoundBox.YMax + inc_y) / 1000
+                for i in range(ny):
+                    if y[i] < comp:
+                        max_y = i
+                        break
+                comp = (obj.CuttingBoundary.Shape.BoundBox.YMin - inc_y) / 1000
+                for i in range(max_y, ny):
+                    if y[i] < comp:
+                        min_y = i
+                        break
 
-                    min_y = 0
-                    max_y = 0
+                x = x[min_x:max_x]
+                y = y[max_y:min_y]
+                datavals = datavals[max_y:min_y, min_x:max_x]
 
-                    comp = (obj.CuttingBoundary.Shape.BoundBox.YMax + inc_y) / 1000
-                    for i in range(ny):
-                        if y[i] < comp:
-                            max_y = i
-                            break
-                    comp = (obj.CuttingBoundary.Shape.BoundBox.YMin - inc_y) / 1000
-                    for i in range(max_y, ny):
-                        if y[i] < comp:
-                            min_y = i
-                            break
-
-                    x = x[min_x:max_x]
-                    y = y[max_y:min_y]
-                    datavals = datavals[max_y:min_y, min_x:max_x]
-
-                pts = []
+                # 2. fine: TODO: ----
 
                 if False:  # faster but more memory 46s - 4,25 gb
                     x, y = np.meshgrid(x, y)
@@ -257,7 +255,7 @@ class _Terrain(ArchComponent.Component):
                     x[:] = 0
                     y[:] = 0
                     datavals[:] = 0
-
+                    pts = []
                     for i in range(0, len(xx)):
                         pts.append(FreeCAD.Vector(xx[i], yy[i], zz[i]) * 1000)
 
@@ -265,30 +263,52 @@ class _Terrain(ArchComponent.Component):
                     yy[:] = 0
                     zz[:] = 0
 
-                else:  # 51s 3,2 gb
-                    createmesh = True
-                    if createmesh:
-                        lines = []
-                        for j in range(len(y)):
-                            edges = []
-                            for i in range(0, len(x) - 1):
-                                ed = Part.makeLine(FreeCAD.Vector(x[i], y[j], datavals[j][i]) * 1000,
-                                                   FreeCAD.Vector(x[i + 1], y[j], datavals[j][i + 1]) * 1000)
-                                edges.append(ed)
-                            line = Part.Wire(edges)
-                            lines.append(line)
-                        p = Part.makeLoft(lines, False, True, False)
-                        p = Part.Solid(p)
-                        obj.Shape = p
-                    else:
-                        pts = []
-                        for j in range(ny):
-                            for i in range(nx):
-                                pts.append(FreeCAD.Vector(x[i], y[j], datavals[j][i]) * 1000)
+                    import PVPlantCreateTerrainMesh
+                    PVPlantCreateTerrainMesh.Triangulate()
 
+                else:  # 51s 3,2 gb
+                    lines = []
+                    for j in range(len(y)):
+                        edges = []
+                        for i in range(0, len(x) - 1):
+                            ed = Part.makeLine(FreeCAD.Vector(x[i], y[j], datavals[j][i]) * 1000,
+                                               FreeCAD.Vector(x[i + 1], y[j], datavals[j][i + 1]) * 1000)
+                            edges.append(ed)
+                        line = Part.Wire(edges)
+                        lines.append(line)
+                    p = Part.makeLoft(lines, False, True, False)
+                    p = Part.Solid(p)
+                    obj.Shape = p
                 pts.clear()
 
+        if prop == "PointsGroup" or prop == "CuttingBoundary":
+            if obj.PointsGroup and obj.CuttingBoundary:
+                import numpy as np
+                bnd = obj.CuttingBoundary.Shape
+                if len(bnd.Faces) == 0:
+                    bnd = Part.Face(bnd)
 
+                firstPoint = self.obj.PointsGroup.Points.Points[0]
+                nbase = FreeCAD.Vector(firstPoint.x, firstPoint.y, firstPoint.z)
+                data = []
+                for point in self.obj.PointsGroup.Points.Points:
+                    tmp = FreeCAD.Vector(0, 0, 0).add(point)
+                    tmp.z = 0
+                    if bnd.isInside(tmp, 0, True):
+                        p = point - nbase
+                        data.append([float(p.x), float(p.y), float(p.z)])
+
+                Data = np.array(data)
+                data.clear()
+
+                import PVPlantCreateTerrainMesh
+                mesh = PVPlantCreateTerrainMesh.Triangulate(Data)
+                mesh.Placement.move(nbase)
+                shape = PVPlantCreateTerrainMesh.MeshToShape(mesh)
+
+                obj.Shape = shape
+                if obj.DEM:
+                    obj.DEM = None
 
     def execute(self, obj):
         print("  -----  Terrain  -  EXECUTE  ----------")
@@ -300,6 +320,8 @@ class _ViewProviderTerrain(ArchComponent.ViewProviderComponent):
 
     def __init__(self, vobj):
         ArchComponent.ViewProviderComponent.__init__(self, vobj)
+        self.Object = vobj.Object
+        vobj.Proxy = self
 
     def getIcon(self):
         return str(os.path.join(DirIcons, "terrain.svg"))
@@ -310,6 +332,23 @@ class _ViewProviderTerrain(ArchComponent.ViewProviderComponent):
         '''
         # GeoCoords Node.
         self.geo_coords = coin.SoGeoCoordinate()
+        self.Object = vobj.Object
+
+    def claimChildren(self):
+        """Define which objects will appear as children in the tree view.
+
+        Set objects within the site group, and the terrain object as children.
+
+        If the Arch preference swallowSubtractions is true, set the additions
+        and subtractions to the terrain as children.
+
+        Returns
+        -------
+        list of <App::DocumentObject>s:
+            The objects claimed as children.
+        """
+
+        return [self.Object.CuttingBoundary,]
 
 
 class _TerrainTaskPanel:
@@ -341,14 +380,9 @@ class _CommandTerrain:
     #    return not FreeCAD.ActiveDocument is None
 
     def IsActive(self):
+        if FreeCAD.ActiveDocument.getObject("Site") is None:
+            return False
         return True
-        if FreeCAD.ActiveDocument is not None:
-            if FreeCADGui.Selection.getCompleteSelection():
-                for o in FreeCAD.ActiveDocument.Objects:
-                    if o.Name[:4] == "Site":
-                        return True
-
-        return False
 
     def Activated(self):
         task = _TerrainTaskPanel()
