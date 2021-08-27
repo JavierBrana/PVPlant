@@ -830,6 +830,24 @@ class _Tracker(_Frame):
         compound.add(self.ModuleAreas[0])
 
         mainbeam = Part.makeBox(totalw + obj.ModuleOffsetX.Value * 2, obj.MainBeamWidth.Value, obj.MainBeamHeight.Value)
+        # definir detalles --------------------------------------------------------------------------------------------
+        edg = []
+        max_length = max([edge.Length for edge in mainbeam.Edges])
+        for edge in mainbeam.Edges:
+            if edge.Length == max_length:
+                edg.append(edge)
+        mainbeam = mainbeam.makeFillet(6, edg)
+        tmp = Part.makeBox((totalw + obj.ModuleOffsetX.Value * 2) * 2, obj.MainBeamWidth.Value, obj.MainBeamHeight.Value)
+        tmp.Placement.Base.x -= tmp.BoundBox.XLength / 2
+        edg = []
+        max_length = max([edge.Length for edge in tmp.Edges])
+        for edge in tmp.Edges:
+            if edge.Length == max_length:
+                edg.append(edge)
+        tmp = tmp.makeFillet(6, edg)
+        tmp = tmp.makeOffsetShape(-3, 0.1)
+        mainbeam = mainbeam.cut(tmp)
+        # fin definir detalles ----------------------------------------------------------------------------------------
         mainbeam.Placement.Base.x = -totalw / 2 - obj.ModuleOffsetX.Value
         mainbeam.Placement.Base.y = -obj.MainBeamWidth.Value / 2
         # compound.add(mainbeam)
