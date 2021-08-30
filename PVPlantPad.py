@@ -1,6 +1,29 @@
+# /**********************************************************************
+# *                                                                     *
+# * Copyright (c) 2021 Javier Braña <javier.branagutierrez2@gmail.com>  *
+# *                                                                     *
+# * This program is free software; you can redistribute it and/or modify*
+# * it under the terms of the GNU Lesser General Public License (LGPL)  *
+# * as published by the Free Software Foundation; either version 2 of   *
+# * the License, or (at your option) any later version.                 *
+# * for detail see the LICENCE text file.                               *
+# *                                                                     *
+# * This program is distributed in the hope that it will be useful,     *
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of      *
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *
+# * GNU Library General Public License for more details.                *
+# *                                                                     *
+# * You should have received a copy of the GNU Library General Public   *
+# * License along with this program; if not, write to the Free Software *
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307*
+# * USA                                                                 *
+# *                                                                     *
+# ***********************************************************************
+
 import FreeCAD, Draft
 import ArchComponent
-import wire3D
+import PVPlantSite
+import copy
 
 if FreeCAD.GuiUp:
     import FreeCADGui
@@ -150,7 +173,6 @@ class _Pad(ArchComponent.Component):
                         "Pad",
                         QT_TRANSLATE_NOOP("App::Property", "Connection")).Length = 10000
 
-
         obj.addProperty("App::PropertyAngle",
                         "EmbankmentSlope",
                         "Pad",
@@ -175,14 +197,32 @@ class _Pad(ArchComponent.Component):
         obj.addProperty("App::PropertyVolume",
                         "CutVolume",
                         "Output",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).CutVolume = 0.00
+                        QT_TRANSLATE_NOOP("App::Property", "Connection"))
         obj.setEditorMode("CutVolume", 1)
 
         obj.addProperty("App::PropertyVolume",
                         "FillVolume",
                         "Output",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).FillVolume = 0.00
+                        QT_TRANSLATE_NOOP("App::Property", "Connection"))
         obj.setEditorMode("FillVolume", 1)
+
+        obj.addProperty("App::PropertyArea",
+                        "PadArea",
+                        "Output",
+                        QT_TRANSLATE_NOOP("App::Property", "Connection"))
+        obj.setEditorMode("PadArea", 1)
+
+        obj.addProperty("App::PropertyArea",
+                        "TopSoilArea",
+                        "Output",
+                        QT_TRANSLATE_NOOP("App::Property", "Connection"))
+        obj.setEditorMode("TopSoilArea", 1)
+
+        obj.addProperty("App::PropertyVolume",
+                        "TopSoilVolume",
+                        "Output",
+                        QT_TRANSLATE_NOOP("App::Property", "Connection"))
+        obj.setEditorMode("TopSoilVolume", 1)
 
     def onDocumentRestored(self, obj):
         """Method run when the document is restored.
@@ -196,39 +236,28 @@ class _Pad(ArchComponent.Component):
     def onChanged(self, fp, prop):
         '''Do something when a property has changed'''
 
-
         '''
         if prop == "Tilt":
             if not hasattr(self, "obj"):
                 return
             if hasattr(self.obj, "MaxPhi"):
-                if self.obj.Tilt > self.obj.MaxPhi:
-                    self.obj.Tilt = self.obj.MaxPhi
-
-                if self.obj.Tilt < self.obj.MinPhi:
-                    self.obj.Tilt = self.obj.MinPhi
-
-            compound = self.obj.Shape.SubShapes[0]
-            compound.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 45)
-            # a = compound.rotate(base, FreeCAD.Vector(1, 0, 0), obj.Tilt)
-            self.changed = True
         '''
 
-
     def execute(self, obj):
-        import Part, DraftGeomUtils
-        import Draft
-        import math
+        import Part
 
         pl = obj.Placement.Base
         shapes = []
-        base = None
+        pad = None
 
-        # Inicialmente hacemos una base rectangular:
-        # TODO: que valga cualquier tipo de forma. Se debe seleccionar una base
         if obj.Base:
-            base = obj.Base
+            if hasattr(obj.Base.Shape, 'Wires') and obj.Base.Shape.Wires:
+                pad = obj.Base.Shape.Wires[0]
+            elif obj.Base.Shape.Edges:
+                pad = Part.Wire(obj.Base.Shape.Edges)
+            pl = obj.Base.Placement.Base
         else:
+            # Si no hay una base seleccionada se crea una rectangular:
             halfWidth = obj.Width.Value / 2
             halfLength = obj.Length.Value / 2
 
@@ -236,40 +265,55 @@ class _Pad(ArchComponent.Component):
             p2 = FreeCAD.Vector(halfLength, -halfWidth, 0)
             p3 = FreeCAD.Vector(halfLength, halfWidth, 0)
             p4 = FreeCAD.Vector(-halfLength, halfWidth, 0)
-            base = Part.makePolygon([p1, p2, p3, p4, p1])
+            pad = Part.makePolygon([p1, p2, p3, p4, p1])
+            pad.Placement.Base = pl
 
         # 1. Terraplén (embankment / fill):
-        fill = self.createSolid(obj, base, 0)
-        fill.Placement.Base += pl
-        fill = self.calculateFill(obj, fill)
+        fill = self.createSolid(obj, pad, 0)
+        #fill.Placement.Base += pl
+        fillcommon, fill = self.calculateFill(obj, fill)
 
         # 2. Desmonte (cut):
-        cut = self.createSolid(obj, base, 1)
-        cut.Placement.Base += pl
-        cut = self.calculateCut(obj, cut)
+        cut = self.createSolid(obj, pad, 1)
+        #cut.Placement.Base += pl
+        cutcommon, cut = self.calculateCut(obj, cut)
 
-        if not fill and not cut:
-            shapes.append(Part.Face(base))
-        else:
-            if fill:
-                fill.Placement.Base -= pl
-                shapes.append(fill)
-            if cut:
-                cut.Placement.Base -= pl
-                shapes.append(cut)
+        topsoilArea = 0
+        topsoilVolume = 0
+        pad = Part.Face(pad)
+        shapes.append(pad)
+        if fill:
+            #fill.Placement.Base -= pl
+            shapes.append(fill)
+            topsoilArea += fill.Area
+            if obj.TopsoilCalculation:
+                filltopsoil = fillcommon.extrude(FreeCAD.Vector(0, 0, -obj.TopsoilHeight))
+                topsoilVolume += filltopsoil.Volume
+                shapes.append(filltopsoil)
+        if cut:
+            #cut.Placement.Base -= pl
+            shapes.append(cut)
+            topsoilArea += cut.Area
+            if obj.TopsoilCalculation:
+                cuttopsoil = cutcommon.extrude(FreeCAD.Vector(0, 0, -obj.TopsoilHeight))
+                topsoilVolume += cuttopsoil.Volume
+                self.obj.CutVolume = self.obj.CutVolume.Value - cuttopsoil.Volume
 
         obj.Shape = Part.makeCompound(shapes)
+        self.obj.PadArea = pad.Area
+        self.obj.TopSoilArea = topsoilArea
+        self.obj.TopSoilVolume = topsoilVolume
 
     def createSolid(self, obj, base, dir = 0):
         import math
-        import BOPTools.SplitAPI as splitter
 
-        zz = FreeCAD.ActiveDocument.Site.Terrain.Shape.BoundBox.ZMin if dir == 0 \
-            else FreeCAD.ActiveDocument.Site.Terrain.Shape.BoundBox.ZMax
+        land = PVPlantSite.get().Terrain
+
+        zz = land.Shape.BoundBox.ZMin if dir == 0 else land.Shape.BoundBox.ZMax
         height = abs(zz - base.Placement.Base.z)
         angle = obj.EmbankmentSlope.Value if dir == 0 else obj.CutSlope.Value
 
-        offset = base.Wires[0].makeOffset2D((height - 10) / math.tan(math.radians(angle)), join=0)
+        offset = base.makeOffset2D((height - 10) / math.tan(math.radians(angle)), join=0)
         offset.Placement.Base.z = zz
 
         offset1 = base.Wires[0].makeOffset2D(10 / math.tan(math.radians(angle)), join=0)
@@ -308,31 +352,38 @@ class _Pad(ArchComponent.Component):
     def calculateFill(self, obj, solid):
         import BOPTools.SplitAPI as splitter
 
-        common = solid.common(FreeCAD.ActiveDocument.Site.Terrain.Shape)
+        common = solid.common(PVPlantSite.get().Terrain.Shape)
         if common.Area > 0:
+            #topsoil = common.extrude(FreeCAD.Vector(0, 0, -obj.TopsoilHeight))
             sp = splitter.slice(solid, [common, ], "Split")
-            common.Placement.Base.z += 10
-            Part.show(common.extrude(FreeCAD.Vector(0, 0, -obj.TopsoilHeight)))
+            commoncopy = common.copy()
+            commoncopy.Placement.Base.z += 10
             volume = 0
             fills = []
             for sol in sp.Solids:
-                common1 = sol.common(common)
+                common1 = sol.common(commoncopy)
                 if common1.Area > 0:
                     volume += sol.Volume
                     fills.append(sol)
             obj.FillVolume = volume
             if len(fills) > 0:
+                '''
                 base = fills[0]
                 for i in range(1, len(fills)):
                     base = base.fuse(fills[i])
-                return base
-        return None
+                '''
+                base = fills.pop(0)
+                if len(fills) > 0:
+                    base = base.fuse(fills)
+                return common, base
+        return None, None
 
     def calculateCut(self, obj, solid):
         import BOPTools.SplitAPI as splitter
 
-        common = solid.common(FreeCAD.ActiveDocument.Site.Terrain.Shape)
+        common = solid.common(PVPlantSite.get().Terrain.Shape)
         if common.Area > 0:
+            #Part.show(common.extrude(FreeCAD.Vector(0, 0, -obj.TopsoilHeight)))
             sp = splitter.slice(solid, [common, ], "Split")
             shells = []
             volume = 0
@@ -347,12 +398,16 @@ class _Pad(ArchComponent.Component):
                     shells.append(shell)
             obj.CutVolume = volume
             if len(shells) > 0:
+                '''
                 base = shells[0]
                 for i in range(1, len(shells)):
                     base = base.fuse(shells[i])
-                return base
-        return None
-
+                '''
+                base = shells.pop(0)
+                if len(shells) > 0:
+                    base = base.fuse(shells)
+                return common, base
+        return None, None
 
 class _ViewProviderPad(ArchComponent.ViewProviderComponent):
     def __init__(self, vobj):
@@ -360,6 +415,69 @@ class _ViewProviderPad(ArchComponent.ViewProviderComponent):
 
     def getIcon(self):
         return str(os.path.join(PVPlantResources.DirIcons, "slope.svg"))
+
+    def attach(self, vobj):
+        '''
+        Create Object visuals in 3D view.
+        '''
+
+        print("+ attach")
+        # GeoCoords Node.
+        self.geo_coords = coin.SoGeoCoordinate()
+
+        # Surface features.
+        self.triangles = coin.SoIndexedFaceSet()
+        self.face_material = coin.SoMaterial()
+        self.edge_material = coin.SoMaterial()
+        self.edge_color = coin.SoBaseColor()
+        self.edge_style = coin.SoDrawStyle()
+        self.edge_style.style = coin.SoDrawStyle.LINES
+
+        shape_hints = coin.SoShapeHints()
+        shape_hints.vertex_ordering = coin.SoShapeHints.COUNTERCLOCKWISE
+        mat_binding = coin.SoMaterialBinding()
+        mat_binding.value = coin.SoMaterialBinding.PER_FACE
+        offset = coin.SoPolygonOffset()
+
+        # Face root.
+        faces = coin.SoSeparator()
+        faces.addChild(shape_hints)
+        faces.addChild(self.face_material)
+        faces.addChild(mat_binding)
+        faces.addChild(self.geo_coords)
+        faces.addChild(self.triangles)
+
+        # Highlight for selection.
+        highlight = coin.SoType.fromName('SoFCSelection').createInstance()
+        highlight.style = 'EMISSIVE_DIFFUSE'
+        faces.addChild(shape_hints)
+        highlight.addChild(self.edge_material)
+        highlight.addChild(mat_binding)
+        highlight.addChild(self.edge_style)
+        highlight.addChild(self.geo_coords)
+        highlight.addChild(self.triangles)
+
+    def updateData(self, obj, prop):
+        '''
+        Update Object visuals when a data property changed.
+        '''
+        print("+ UpdateData")
+        print("+--- Propiedad: ", prop)
+        origin = PVPlantSite.get()
+        base = copy.deepcopy(origin.Origin)
+        base.z = 0
+
+        if prop == "Shape":
+            shape = obj.getPropertyByName(prop)
+
+            # Get GeoOrigin.
+            points = [ver.Point for ver in shape.Vertexes]
+
+            # Set GeoCoords.
+            geo_system = ["UTM", origin.UtmZone, "FLAT"]
+            self.geo_coords.geoSystem.setValues(geo_system)
+            self.geo_coords.point.values = points
+
 
 
 class _PadTaskPanel:
@@ -423,18 +541,20 @@ class _CommandPad(gui_base_original.Creator):
         """Execute when the command is called."""
 
         sel = FreeCADGui.Selection.getSelection()
-        self.obj = makePad()
-        print(self.obj)
+        base = None
+        needbase = True
+        if len(sel) > 0:
+            needbase = False
+            base = sel[0]
+        self.obj = makePad(base)
 
-
-        gui_base_original.Creator.Activated(self, name=translate("draft", "Line"))
-
-        self.ui.wireUi(name)
-        self.ui.setTitle("Pad")
-        #self.obj = self.doc.addObject("Part::Feature", self.featureName)
-        #gui_utils.format_object(self.obj)
-
-        self.call = self.view.addEventCallback("SoEvent", self.action)
+        if needbase:
+            gui_base_original.Creator.Activated(self, name=translate("draft", "Line"))
+            self.ui.wireUi(name)
+            self.ui.setTitle("Pad")
+            #self.obj = self.doc.addObject("Part::Feature", self.featureName)
+            #gui_utils.format_object(self.obj)
+            self.call = self.view.addEventCallback("SoEvent", self.action)
 
     def action(self, arg):
         """Handle the 3D scene events.

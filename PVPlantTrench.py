@@ -1,6 +1,27 @@
+# /**********************************************************************
+# *                                                                     *
+# * Copyright (c) 2021 Javier Braña <javier.branagutierrez2@gmail.com>  *
+# *                                                                     *
+# * This program is free software; you can redistribute it and/or modify*
+# * it under the terms of the GNU Lesser General Public License (LGPL)  *
+# * as published by the Free Software Foundation; either version 2 of   *
+# * the License, or (at your option) any later version.                 *
+# * for detail see the LICENCE text file.                               *
+# *                                                                     *
+# * This program is distributed in the hope that it will be useful,     *
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of      *
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *
+# * GNU Library General Public License for more details.                *
+# *                                                                     *
+# * You should have received a copy of the GNU Library General Public   *
+# * License along with this program; if not, write to the Free Software *
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307*
+# * USA                                                                 *
+# *                                                                     *
+# ***********************************************************************
+
 import FreeCAD, Draft
 import ArchComponent
-import wire3D
 
 if FreeCAD.GuiUp:
     import FreeCADGui
@@ -39,6 +60,11 @@ def makeTrench(base=None):
     FreeCAD.ActiveDocument.recompute()
     return obj
 
+def SplitTrench(wire, point):
+    import BOPTools.SplitAPI as splitter
+
+    plane = Part.Plane(Location, Normal)
+    wires = splitter.slice(wire, [plane, ], "Split")
 
 class _Trench(ArchComponent.Component):
     def __init__(self, obj):
@@ -53,9 +79,6 @@ class _Trench(ArchComponent.Component):
 
         obj.IfcType = "Civil Element"  ## puede ser: Cable Carrier Segment
         obj.setEditorMode("IfcType", 1)
-
-
-        self.count = 0
 
     def setProperties(self, obj):
         # Definicion de Propiedades:
@@ -156,7 +179,7 @@ class _Trench(ArchComponent.Component):
 
     def onDocumentRestored(self, obj):
         """Method run when the document is restored.
-        Re-adds the Arch component, and object properties."""
+        Re-adds the component, and object properties."""
 
         ArchComponent.Component.onDocumentRestored(self, obj)
         self.obj = obj
@@ -167,20 +190,9 @@ class _Trench(ArchComponent.Component):
         import Part, DraftGeomUtils, math
         import Draft
 
-        self.count += 1
-        print("         ########     Trench - execute: ", self.count)
-
-        w = None
-        w = obj.Base.Shape
-        land = FreeCAD.ActiveDocument.Shape
-        w = land.Shape.makeParallelProjection(obj.Base.Shape, FreeCAD.Vector(0, 0, 1))
-        po = []
-        for ver in w.Vertexes:
-            po.append(ver.Point)
-        #w = w.Wires[0]
-        w = Draft.makeWire(po)
-        FreeCAD.ActiveDocument.recompute()
-
+        w = self.calculatePathWire(obj)
+        land = FreeCAD.ActiveDocument.Site.Terrain.Shape
+        w = Part.Wire(land.makeParallelProjection(w, FreeCAD.Vector(0, 0, 1)).Edges)
 
         vec_down_left = FreeCAD.Vector(-obj.Width.Value / 2, 0, -obj.Height.Value)
         vec_down_right = FreeCAD.Vector(obj.Width.Value / 2, 0, -obj.Height.Value)
@@ -189,115 +201,67 @@ class _Trench(ArchComponent.Component):
         vec_sand_left = FreeCAD.Vector(-obj.Width.Value / 2, 0, -obj.Height.Value + obj.Sand_Height.Value)
         vec_sand_right = FreeCAD.Vector(obj.Width.Value / 2, 0, -obj.Height.Value + obj.Sand_Height.Value)
 
-        edge1 = Part.makeLine(vec_down_left, vec_down_right)
-        edge2 = Part.makeLine(vec_down_right, vec_up_right)
-        edge3 = Part.makeLine(vec_up_right, vec_up_left)
-        edge4 = Part.makeLine(vec_up_left, vec_down_left)
-        p = Part.Wire([edge1, edge2, edge3, edge4])
+        vec_top = FreeCAD.Vector(0, 0, land.BoundBox.ZLength)
+
+        vec_down_left = FreeCAD.Vector(-obj.Width.Value / 2, 0, -obj.Height.Value)
+        vec_down_right = FreeCAD.Vector(obj.Width.Value / 2, 0, -obj.Height.Value)
+        vec_top_left = vec_down_left + vec_top
+        vec_top_right = vec_down_right + vec_top
 
         # 1. Perfil original del cual salen todos los demás:
-        #p = Part.makePolygon([vec_down_left, vec_down_right, vec_up_right])
+        p = Part.makePolygon([vec_down_left, vec_down_right])
+        c = (vec_up_right - vec_up_left) / 2
+        Part.show(p)
+        sh = w.makePipeShell([p, ], True, False, 1)
+        Part.show(sh)
+        return
 
+        shapes = []
+        p = Part.makePolygon([vec_down_left, vec_down_right, vec_up_right, vec_up_left, vec_down_left])
+        fill = self.calculateLoft(obj, p, c, w)
+        shapes.append(fill)
+
+        obj.Shape = Part.makeCompound(shapes)
+
+    def calculatePathWire(self, obj):
+        if obj.Base:
+            wire = None
+            if hasattr(obj.Base.Shape, 'Wires') and obj.Base.Shape.Wires:
+                wire = obj.Base.Shape.Wires[0]
+            elif obj.Base.Shape.Edges:
+                wire = Part.Wire(obj.Base.Shape.Edges)
+
+            return wire
+        return None
+
+    def calculateLoft(self, obj, profile, center, wire):
+        import DraftGeomUtils
         shapes = []
         usenew = False
 
-        if usenew:
-            profiles = []
-            c = p.CenterOfMass #(vec_up_right + vec_up_left) / 2
-            for ed in w.Edges:
-                p1 = p.copy()
-                delta = ed.CenterOfMass - c
-                p1.translate(delta)
 
-                if Draft.getType(obj.Base) == "BezCurve":
-                    v1 = obj.Base.Placement.multVec(obj.Base.Points[1]) - w.Vertexes[0].Point
-                else:
-                    v1 = ed.Vertexes[1].Point - ed.Vertexes[0].Point
+        delta = wire.Vertexes[0].Point - center
+        profile.translate(delta)
 
-                v2 = DraftGeomUtils.getNormal(p1)
-                rot = FreeCAD.Rotation(v2, v1)
-                print (" +++++ rot: ", rot.toEuler())
-                #p1.rotate(ed.CenterOfMass, rot.Axis, math.degrees(rot.Angle))
-                p1.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), rot.toEuler()[0])
-
-                profiles.append(p1)
-                Part.show(p1, "Perfil")
-
-            for ind in range(len(w.Edges) - 1):
-                e1 = w.Edges[ind]
-                e2 = w.Edges[ind + 1]
-
-                vec1 = e1.Vertexes[1].Point - e1.Vertexes[0].Point
-                vec1.normalize()
-                vec2 = e2.Vertexes[1].Point - e2.Vertexes[0].Point
-                vec2.normalize()
-                vec3 = vec1.add(vec2)
-                plane = Part.Plane(e1.Vertexes[1].Point, vec3)
-                plane = Part.makePlane(10000,10000, e1.Vertexes[1].Point, vec3)
-                plane.translate(e1.Vertexes[1].Point - plane.CenterOfMass)
-                Part.show(plane)
-
-                myWiresOut3 = []
-                for w in p.Wires:
-                    newWire = plane.makeParallelProjection(w, vec1)
-                    myWiresOut3.append(newWire)
-                print(myWiresOut3)
-                Part.show(myWiresOut3)
-                #f_new = Part.Wire(myWiresOut3)
-                #Part.show(f_new)
-
-                profiles.append(p1)
-                Part.show(p1, "Perfil")
-
-
-            if p.Faces:
-                for f in p.Faces:
-                    sh = w.makePipeShell([f.OuterWire], True, False, 2)
-                    for shw in f.Wires:
-                        if shw.hashCode() != f.OuterWire.hashCode():
-                            sh2 = w.makePipeShell([shw], True, False, 2)
-                            sh = sh.cut(sh2)
-                    shapes.append(sh)
-            elif p.Wires:
-                for pw in p.Wires:
-                    sh = w.makePipeShell(profiles, True, False, 2)
-                    shapes.append(sh)
+        if Draft.getType(obj.Base) == "BezCurve":
+            v1 = obj.Base.Placement.multVec(obj.Base.Points[1]) - w.Vertexes[0].Point
         else:
-            if hasattr(p, "CenterOfMass"):
-                c = p.CenterOfMass
-            else:
-                c = p.BoundBox.Center
-            c = (vec_up_right + vec_up_left) / 2
-            delta = w.Vertexes[0].Point - c
-            p.translate(delta)
+            v1 = wire.Vertexes[1].Point - wire.Vertexes[0].Point
+        v2 = DraftGeomUtils.getNormal(profile)
+        rot = FreeCAD.Rotation(v2, v1)
+        ang = rot.toEuler()[0]
+        profile.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), ang)
+        ed = profile.Edges[0]
+        profile = Part.makeLine(ed.Vertexes[0].Point, ed.Vertexes[1].Point)
 
-            if Draft.getType(obj.Base) == "BezCurve":
-                v1 = obj.Base.Placement.multVec(obj.Base.Points[1]) - w.Vertexes[0].Point
-            else:
-                v1 = w.Vertexes[1].Point - w.Vertexes[0].Point
-            v2 = DraftGeomUtils.getNormal(p)
-            rot = FreeCAD.Rotation(v2, v1)
-            print (rot, " - ", math.degrees(rot.Angle))
-            #p.rotate(w.Vertexes[0].Point, rot.Axis, math.degrees(rot.Angle))
-            ang = rot.toEuler()[0]
-            p.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), ang)
+        for pw in profile.Edges:
+            sh = wire.makePipeShell([pw], True, False, 1)
+            shapes.append(sh)
 
-            Part.show(p, "UN_Perfil")
-
-            if p.Faces:
-                for f in p.Faces:
-                    sh = w.makePipeShell([f.OuterWire], True, False, 2)
-                    for shw in f.Wires:
-                        if shw.hashCode() != f.OuterWire.hashCode():
-                            sh2 = w.makePipeShell([shw], True, False, 2)
-                            sh = sh.cut(sh2)
-                    shapes.append(sh)
-            elif p.Wires:
-                for pw in p.Wires:
-                    sh = w.makePipeShell([pw], True, False, 1)
-                    shapes.append(sh)
-
-        obj.Shape = Part.makeCompound(shapes)
+        shape = shapes.pop(0)
+        if len(shapes) > 0:
+            shape = shape.fuse(shapes)
+        return shape
 
 
 class _ViewProviderTrench(ArchComponent.ViewProviderComponent):

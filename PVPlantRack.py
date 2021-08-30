@@ -1,5 +1,6 @@
 import FreeCAD, Draft
 import ArchComponent
+import PVPlantSite
 
 if FreeCAD.GuiUp:
     import FreeCADGui
@@ -625,11 +626,16 @@ class _FixedRackTaskPanel:
 ''' ------------------------------------------- Tracker Structure --------------------------------------------------- '''
 
 
-def makeTracker(objectslist=None, baseobj=None, name="Rack"):
+def makeTracker(name="Tracker"):
     obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Tracker")
+    obj.Label = name
     _Tracker(obj)
     _ViewProviderTracker(obj.ViewObject)
     FreeCAD.ActiveDocument.recompute()
+
+    site = PVPlantSite.get()
+    site.Frames.append(obj)
+
     return obj
 
 
@@ -775,6 +781,7 @@ class _Tracker(_Frame):
             self.changed = False
 
         if prop == "Tilt":
+            '''
             if not hasattr(self, "obj"):
                 return
             if hasattr(self.obj, "MaxPhi"):
@@ -788,6 +795,7 @@ class _Tracker(_Frame):
             compound.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1,0,0), 45)
             #a = compound.rotate(base, FreeCAD.Vector(1, 0, 0), obj.Tilt)
             self.changed = True
+            '''
 
     def CalculateModuleArray(self, obj, totalh, totalw, moduleh, modulew):
 
@@ -838,7 +846,7 @@ class _Tracker(_Frame):
                 edg.append(edge)
         mainbeam = mainbeam.makeFillet(6, edg)
         tmp = Part.makeBox((totalw + obj.ModuleOffsetX.Value * 2) * 2, obj.MainBeamWidth.Value, obj.MainBeamHeight.Value)
-        tmp.Placement.Base.x -= tmp.BoundBox.XLength / 2
+        tmp.Placement.Base.x -= tmp.BoundBox.XLength / 4
         edg = []
         max_length = max([edge.Length for edge in tmp.Edges])
         for edge in tmp.Edges:
@@ -850,7 +858,7 @@ class _Tracker(_Frame):
         # fin definir detalles ----------------------------------------------------------------------------------------
         mainbeam.Placement.Base.x = -totalw / 2 - obj.ModuleOffsetX.Value
         mainbeam.Placement.Base.y = -obj.MainBeamWidth.Value / 2
-        # compound.add(mainbeam)
+        compound.add(mainbeam)
 
         if obj.ModuleViews:
             correaoffsety = (moduleh - obj.BeamSpacing.Value - obj.BeamWidth.Value) / 2

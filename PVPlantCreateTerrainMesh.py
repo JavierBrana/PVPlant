@@ -1,3 +1,25 @@
+# /**********************************************************************
+# *                                                                     *
+# * Copyright (c) 2021 Javier Braña <javier.branagutierrez2@gmail.com>  *
+# *                                                                     *
+# * This program is free software; you can redistribute it and/or modify*
+# * it under the terms of the GNU Lesser General Public License (LGPL)  *
+# * as published by the Free Software Foundation; either version 2 of   *
+# * the License, or (at your option) any later version.                 *
+# * for detail see the LICENCE text file.                               *
+# *                                                                     *
+# * This program is distributed in the hope that it will be useful,     *
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of      *
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *
+# * GNU Library General Public License for more details.                *
+# *                                                                     *
+# * You should have received a copy of the GNU Library General Public   *
+# * License along with this program; if not, write to the Free Software *
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307*
+# * USA                                                                 *
+# *                                                                     *
+# ***********************************************************************
+
 import FreeCAD, FreeCADGui, Draft
 from PySide import QtCore, QtGui, QtSvg
 from PySide.QtCore import QT_TRANSLATE_NOOP
@@ -8,9 +30,8 @@ except AttributeError:
     def _fromUtf8(s):
         return s
 
-import os
+import os, math
 from PVPlantResources import DirIcons as DirIcons
-
 
 class _TaskPanel:
     def __init__(self, obj = None):
@@ -48,46 +69,37 @@ class _TaskPanel:
             self.obj = sel[0]
             self.form.editCloud.setText(self.obj.Label)
 
-    def MaxLength(self, P1, P2, P3):
+    def MaxLength(self, P1, P2, P3, MaxlengthLE):
         """
         Calculation of the 2D length between triangle edges
         """
-        # Get user input
-        MaxlengthLE = int(self.form.MaxlengthLE.text()) * 1000
 
         p1 = FreeCAD.Vector(P1[0], P1[1], 0)
         p2 = FreeCAD.Vector(P2[0], P2[1], 0)
         p3 = FreeCAD.Vector(P3[0], P3[1], 0)
 
-        # Calculate length between triangle vertices
         List = [[p1, p2], [p2, p3], [p3, p1]]
         for i, j in List:
-            vec1 = i.sub(j)
-            if vec1.Length > MaxlengthLE:
+            vec = i.sub(j)
+            if vec.Length > MaxlengthLE:
                 return False
+
         return True
 
-    def MaxAngle(self, P1, P2, P3):
+    def MaxAngle(self, P1, P2, P3, MaxAngleLE):
         """
         Calculation of the 2D angle between triangle edges
         """
-        import math
 
-        # Get user input
-        MaxAngleLE = math.radians(int(self.form.MaxAngleLE.text()))
-
-        import math
         p1 = FreeCAD.Vector(P1[0], P1[1], 0)
         p2 = FreeCAD.Vector(P2[0], P2[1], 0)
         p3 = FreeCAD.Vector(P3[0], P3[1], 0)
 
-        # Calculate angle between triangle vertices
         List = [[p1, p2, p3], [p2, p3, p1], [p3, p1, p2]]
         for j, k, l in List:
             vec1 = j.sub(k)
             vec2 = l.sub(k)
             radian = vec1.getAngle(vec2)
-
             if radian > MaxAngleLE:
                 return False
 
@@ -95,145 +107,151 @@ class _TaskPanel:
 
     def accept(self):
         from datetime import datetime
-        starttime = datetime.now()
+        starttime = datetime.now()       
 
+        import Part
         import numpy as np
         from scipy.spatial import Delaunay
 
-        test = []
-        for Point in self.obj.Points.Points:
-            test.append([float(Point.x), float(Point.y), float(Point.z)])
+        bnd = FreeCAD.ActiveDocument.Site.Terrain.CuttingBoundary.Shape
+        if len(bnd.Faces) == 0:
+            bnd = Part.Face(bnd)
 
-        nbase = FreeCAD.Vector(test[0][0], test[0][1], test[0][2])
+        # Get user input
+        MaxlengthLE = int(self.form.MaxlengthLE.text()) * 1000
+        MaxAngleLE = math.radians(int(self.form.MaxAngleLE.text()))
+
+        firstPoint = self.obj.Points.Points[0]
+        nbase = FreeCAD.Vector(firstPoint.x, firstPoint.y, firstPoint.z)
         data = []
-        for i in test:
-            data.append([i[0] - nbase.x, i[1] - nbase.y, i[2] - nbase.z])
+        for point in self.obj.Points.Points:
+            tmp = FreeCAD.Vector(0, 0, 0).add(point)
+            tmp.z = 0
+            if bnd.isInside(tmp, 0, True):
+                p = point - nbase
+                data.append([float(p.x), float(p.y), float(p.z)])
+
         Data = np.array(data)
-        test.clear()
         data.clear()
+
+        ''' not working:
+        import multiprocessing
+        rows = Data.shape[0]
+
+        cpus = multiprocessing.cpu_count()
+        steps = math.ceil(rows / cpus)
+
+        for cpu in range(cpus - 1):
+            start = steps * cpu
+            end = steps * (cpu + 1)
+            if end > rows:
+                end = rows - start
+            tmp = Data[start : end, :]
+            p = multiprocessing.Process(target = Triangulate, args = (tmp,))
+            p.start()
+            p.join()
+        return
+        '''
 
         # TODO: si es muy grande, dividir el cálculo de la maya en varias etapas
         # Create delaunay triangulation
         tri = Delaunay(Data[:, :2])
         print("tiempo delaunay:", datetime.now() - starttime)
-        starttime = datetime.now()
 
-        List = []
-        for i in tri.vertices:
-            first = int(i[0])
-            second = int(i[1])
-            third = int(i[2])
+        faces = tri.simplices
+        from stl import mesh
+        wireframe = mesh.Mesh(np.zeros(faces.shape[0], dtype=mesh.Mesh.dtype))
+        for i, f in enumerate(faces):
+            if self.MaxLength(Data[f[0]], Data[f[1]], Data[f[2]], MaxlengthLE) and \
+               self.MaxAngle(Data[f[0]], Data[f[1]], Data[f[2]], MaxAngleLE):
+                for j in range(3):
+                    wireframe.vectors[i][j] = Data[f[j], :]
 
-            # Test triangle
-            if self.MaxLength(Data[first], Data[second], Data[third]) \
-                    and self.MaxAngle(Data[first], Data[second], Data[third]):
-                List.append(Data[first])
-                List.append(Data[second])
-                List.append(Data[third])
-        print("tiempo filtro:", datetime.now() - starttime)
-        starttime = datetime.now()
-        print(List)
-        return
+        import Mesh
+        MeshObject = Mesh.Mesh(wireframe.vectors.tolist())
+        MeshObject.Placement.move(nbase)
+        MeshObject.harmonizeNormals()
+        Surface = FreeCAD.ActiveDocument.addObject("Mesh::Feature", self.form.SurfaceNameLE.text())
+        Surface.Mesh = MeshObject
+        Surface.Label = self.form.SurfaceNameLE.text()
 
-        useMesh = False
-        if useMesh:
-            MeshList = []
-            for i in tri.vertices:
-                first = int(i[0])
-                second = int(i[1])
-                third = int(i[2])
-
-                #Test triangle
-                if self.MaxLength(Data[first], Data[second], Data[third])\
-                        and self.MaxAngle(Data[first], Data[second], Data[third]):
-                    MeshList.append(Data[first])
-                    MeshList.append(Data[second])
-                    MeshList.append(Data[third])
-
-            import Mesh
-            MeshObject = Mesh.Mesh(MeshList)
-            MeshObject.Placement.move(nbase)
-            Surface = FreeCAD.ActiveDocument.addObject("Mesh::Feature", self.form.SurfaceNameLE.text())
-            Surface.Mesh = MeshObject
-            Surface.Label = self.form.SurfaceNameLE.text()
-
-        else:
-            import Part
-            from array import array
-            faces = []
-            cnt = 0
-            print("triangles: ")
-            print(tri.vertices, "\n")
-            for i in tri.vertices:
-                first = int(i[0])
-                second = int(i[1])
-                third = int(i[2])
-
-                #print(i, " ", i.tolist())
-                print(array(Data[first].tolist()))
-
-                #Test triangle
-                #if self.MaxLength(Data[first], Data[second], Data[third])\
-                #        and self.MaxAngle(Data[first], Data[second], Data[third]):
-
-                vertexes = [(Data[first][0],  Data[first][1],  Data[first][2]),
-                            (Data[second][0], Data[second][1], Data[second][2]),
-                            (Data[third][0],  Data[third][1],  Data[third][2]),
-                            (Data[first][0],  Data[first][1],  Data[first][2])]
-
-                print("       ----", vertexes)
-                polygon = Part.makePolygon(vertexes)
-                Part.show(polygon)
-                faces.append(Part.Face(polygon))
-
-                cnt += 1
-                if cnt == 5:
-                    break
-
-                """
-                array = [[FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1, 0, 1), FreeCAD.Vector(2, 0, 0)],
-                         [FreeCAD.Vector(0, 1, 1), FreeCAD.Vector(1, 1, 2), FreeCAD.Vector(2, 1, 1)],
-                         [FreeCAD.Vector(0, 2, 0), FreeCAD.Vector(1, 2, 1.5), FreeCAD.Vector(2, 2, 0)],
-                         [FreeCAD.Vector(0, 3, 0), FreeCAD.Vector(1, 3, 0), FreeCAD.Vector(2, 3, 0.5)]]
-
-                # Display the points
-
-                v = []
-                for row in array:
-                    for point in row:
-                        v.append(Part.Vertex(point))
-
-                c = Part.Compound(v)
-                Part.show(c)
-
-                # Generate an interpolating surface
-
-                intSurf = Part.BSplineSurface()
-                intSurf.interpolate(array)
-
-                # Generate an approximating surface
-
-                appSurf = Part.BSplineSurface()
-                appSurf.approximate(Points=array)
-
-                # Display the surfaces
-
-                Part.show(intSurf.toShape())
-                Part.show(appSurf.toShape())
-                """
-
-            Part.show(Part.makeCompound(faces))
-            shell = Part.makeShell(faces)
-            Part.show(shell, "Land")
+        shape = MeshToShape(MeshObject)
+        import Part
+        Part.show(shape)
 
         FreeCAD.ActiveDocument.recompute()
         FreeCADGui.Control.closeDialog()
-        print("tiempo: tardado", datetime.now() - starttime)
+        print(" --- Tiempo tardado:", datetime.now() - starttime)
 
     def reject(self):
         FreeCADGui.Control.closeDialog()
 
 
+def Triangulate(Points, MaxlengthLE = 8000, MaxAngleLE = math.pi/2):  ## multiprocessing
+    import numpy as np
+    from scipy.spatial import Delaunay
+    from stl import mesh
+    import Mesh
+
+    tri = Delaunay(Points[:, :2])
+    faces = tri.simplices
+    wireframe = mesh.Mesh(np.zeros(faces.shape[0], dtype=mesh.Mesh.dtype))
+    for i, f in enumerate(faces):
+        if MaxLength(Points[f[0]], Points[f[1]], Points[f[2]], MaxlengthLE) and \
+           MaxAngle(Points[f[0]], Points[f[1]], Points[f[2]], MaxAngleLE):
+            for j in range(3):
+                wireframe.vectors[i][j] = Points[f[j], :]
+
+    MeshObject = Mesh.Mesh(wireframe.vectors.tolist())
+    MeshObject.harmonizeNormals()
+    if MeshObject.Facets[0].Normal.z < 0:
+        MeshObject.flipNormals()
+    return MeshObject
+
+def MaxLength(P1, P2, P3, MaxlengthLE):
+    """
+    Calculation of the 2D length between triangle edges
+    """
+
+    p1 = FreeCAD.Vector(P1[0], P1[1], 0)
+    p2 = FreeCAD.Vector(P2[0], P2[1], 0)
+    p3 = FreeCAD.Vector(P3[0], P3[1], 0)
+
+    List = [[p1, p2], [p2, p3], [p3, p1]]
+    for i, j in List:
+        vec = i.sub(j)
+        if vec.Length > MaxlengthLE:
+            return False
+
+    return True
+
+def MaxAngle(P1, P2, P3, MaxAngleLE):
+    """
+    Calculation of the 2D angle between triangle edges
+    """
+
+    p1 = FreeCAD.Vector(P1[0], P1[1], 0)
+    p2 = FreeCAD.Vector(P2[0], P2[1], 0)
+    p3 = FreeCAD.Vector(P3[0], P3[1], 0)
+
+    List = [[p1, p2, p3], [p2, p3, p1], [p3, p1, p2]]
+    for j, k, l in List:
+        vec1 = j.sub(k)
+        vec2 = l.sub(k)
+        radian = vec1.getAngle(vec2)
+        if radian > MaxAngleLE:
+            return False
+
+    return True
+
+def MeshToShape(mesh):
+    import Part
+    meshcopy = mesh.copy()
+    meshcopy.Placement.Base = FreeCAD.Vector(0,0,0)
+    shape = Part.Shape()
+    shape.makeShapeFromMesh(meshcopy.Topology, 0.1)
+    shape.Placement = mesh.Placement
+    return shape
 
 class _PVPlantCreateTerrainMesh:
 
@@ -253,3 +271,13 @@ class _PVPlantCreateTerrainMesh:
 
 if FreeCAD.GuiUp:
     FreeCADGui.addCommand('PVPlantCreateTerrainMesh', _PVPlantCreateTerrainMesh())
+
+
+def toShape():
+    from datetime import datetime
+    starttime = datetime.now()
+    mesh = FreeCAD.ActiveDocument.Surface
+    shape = Part.Shape()
+    shape.makeShapeFromMesh(mesh.Mesh.Topology, 0.1)
+    Part.show(shape)
+    print(datetime.now() - starttime)

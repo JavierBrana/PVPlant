@@ -269,7 +269,7 @@ class _PVPlantPlacementTaskPanel:
         # self.form:
         self.form = FreeCADGui.PySideUic.loadUi(os.path.join(PVPlantResources.__dir__, "PVPlantPlacement.ui"))
         self.form.setWindowIcon(QtGui.QIcon(os.path.join(PVPlantResources.DirIcons, "way.svg")))
-        self.form.editGapcols.setText("400 mm")
+        self.form.editGapRows.setText("400 mm")
         self.form.editGapCols.setText("5000 mm")
         self.form.editOffsetHorizontal.setText("0 mm")
         self.form.editOffsetVertical.setText("0 mm")

@@ -95,6 +95,7 @@ class _FencePost(ArchComponent.Component):
         self.setProperties(obj)
 
     def execute(self,obj):
+        import Part
         pl = obj.Placement
 
         if obj.CloneOf:
@@ -104,9 +105,10 @@ class _FencePost(ArchComponent.Component):
             try:
                 #sh = w.makePipeShell([p], True, False, 2)
                 sh = w.revolve(FreeCAD.Vector(0.0, 0.0, 0.0), FreeCAD.Vector(0.0, 0.0, 1.0), 360)
+                sh = Part.Solid(sh)
 
             except:
-                FreeCAD.Console.PrintError(translate("PVPlant", "Unable to build the pipe")+"\n")
+                FreeCAD.Console.PrintError("Unable to build the pipe \n")
 
             else:
                 obj.Shape = sh

@@ -1,14 +1,39 @@
+# /**********************************************************************
+# *                                                                     *
+# * Copyright (c) 2021 Javier Braña <javier.branagutierrez2@gmail.com>  *
+# *                                                                     *
+# * This program is free software; you can redistribute it and/or modify*
+# * it under the terms of the GNU Lesser General Public License (LGPL)  *
+# * as published by the Free Software Foundation; either version 2 of   *
+# * the License, or (at your option) any later version.                 *
+# * for detail see the LICENCE text file.                               *
+# *                                                                     *
+# * This program is distributed in the hope that it will be useful,     *
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of      *
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *
+# * GNU Library General Public License for more details.                *
+# *                                                                     *
+# * You should have received a copy of the GNU Library General Public   *
+# * License along with this program; if not, write to the Free Software *
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307*
+# * USA                                                                 *
+# *                                                                     *
+# ***********************************************************************
+
 import FreeCAD
 import ArchComponent
 import Draft
-import PVPlantFencePost
 import math
+import PVPlantFencePost
+import PVPlantSite
+import copy
 
 if FreeCAD.GuiUp:
     import FreeCADGui
     from PySide import QtCore, QtGui, QtSvg
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import PySide.QtGui as QtGui
+    from pivy import coin
 else:
     # \cond
     def translate(ctxt, txt):
@@ -245,14 +270,13 @@ def calculatePlacementsOnPath(shapeRotation, pathwire, count, xlate, align):
 
 class _Fence(ArchComponent.Component):
     def __init__(self, obj):
-
         ArchComponent.Component.__init__(self, obj)
         self.setProperties(obj)
-        # Does a IfcType exist?
-        # obj.IfcType = "Fence"
-        obj.MoveWithHost = False
         self.Posts = []
         self.Foundations = []
+
+        # Does a IfcType exist?
+        # obj.IfcType = "Fence"
 
     def setProperties(self, obj):
         ArchComponent.Component.setProperties(self, obj)
@@ -305,29 +329,42 @@ class _Fence(ArchComponent.Component):
         if not "NumberOfSections" in pl:
             obj.addProperty("App::PropertyInteger",
                             "NumberOfSections",
-                            "Fence",
+                            "Output",
                             QT_TRANSLATE_NOOP("App::Property", "The number of sections the fence is built of"))
             obj.setEditorMode("NumberOfSections", 1)
 
         if not "NumberOfPosts" in pl:
-            obj.addProperty("App::PropertyInteger",
+            obj.addProperty("App::PropertyQuantity",
                             "NumberOfPosts",
-                            "Fence",
+                            "Output",
                             QT_TRANSLATE_NOOP("App::Property", "The number of posts used to build the fence"))
             obj.setEditorMode("NumberOfPosts", 1)
+
+        if not "Length" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "Length",
+                            "Output",
+                            QT_TRANSLATE_NOOP("App::Property", "The number of posts used to build the fence"))
+            obj.setEditorMode("Length", 1)
+
+        if not "PlacementList" in pl:
+            obj.addProperty("App::PropertyPlacementList",
+                            "PlacementList",
+                            "Output",
+                            QT_TRANSLATE_NOOP("App::Property", "The number of posts used to build the fence"))
+            obj.setEditorMode("Length", 1)
+
 
         self.Type = "PVPlatFence"
 
     def __getstate__(self):
         if hasattr(self, 'sectionFaceNumbers'):
             return (self.sectionFaceNumbers)
-
         return None
 
     def __setstate__(self, state):
         if state is not None and isinstance(state, tuple):
             self.sectionFaceNumbers = state[0]
-
         return None
 
     def execute(self, obj):
@@ -335,7 +372,7 @@ class _Fence(ArchComponent.Component):
 
         self.Posts = []
         self.Foundations = []
-
+        land = PVPlantSite.get().Terrain
         pathwire = self.calculatePathWire(obj)
         if not pathwire:
             # FreeCAD.Console.PrintLog("ArchFence.execute: path " + obj.Base.Name + " has no edges\n")
@@ -349,6 +386,11 @@ class _Fence(ArchComponent.Component):
             FreeCAD.Console.PrintLog("ArchFence.execute: Post not set\n")
             return
 
+        proj = land.Shape.makeParallelProjection(pathwire, FreeCAD.Vector(0, 0, 1))
+        Part.show(proj)
+        pathwire = Part.Wire(proj.Edges)
+        Part.show(pathwire)
+
         pathLength = pathwire.Length
         sectionLength = obj.Gap.Value
         postLength = obj.Post.Shape.BoundBox.XMax
@@ -358,11 +400,13 @@ class _Fence(ArchComponent.Component):
 
         count = 0
         drawFirstPost = True
+        pathLength = 0
         for seg in pathsegments:
             segwire = Part.Wire(seg)
-            pathLength = segwire.Length
+            segLength = segwire.Length
+            pathLength += segLength
 
-            obj.NumberOfSections = self.calculateNumberOfSections(pathLength, sectionLength, postLength)
+            obj.NumberOfSections = self.calculateNumberOfSections(segLength, sectionLength, postLength)
             obj.NumberOfPosts = obj.NumberOfSections + 1
 
             count += obj.NumberOfSections
@@ -379,9 +423,10 @@ class _Fence(ArchComponent.Component):
 
         obj.NumberOfSections = count
         obj.NumberOfPosts = obj.NumberOfSections + 1
+        obj.Length = pathLength
 
         postShapes, postFoundation = self.calculatePosts(obj, postPlacements)
-        sections, num = self.calculateSections(obj, postPlacements, postLength, sectionLength)
+        sections, num = self.calculateSections(obj, postPlacements)
 
         allShapes.extend(postShapes)
         allShapes.extend(postFoundation)
@@ -415,11 +460,9 @@ class _Fence(ArchComponent.Component):
         return math.ceil(withoutLastPost / realSectionLength)
 
     def calculatePostPlacements(self, obj, pathwire, rotation):
-
-        # postWidth = obj.Post.Diameter.Value / 2
-        # transformationVector = FreeCAD.Vector(0, postWidth, 0)
-
-        transformationVector = FreeCAD.Vector(0, 0, 0)
+        postWidth = obj.Post.Diameter.Value
+        transformationVector = FreeCAD.Vector(0, postWidth, 0)
+        #transformationVector = FreeCAD.Vector(0, 0, 0)
         if False:
             placements = []
             for e in pathwire.Edges:
@@ -431,8 +474,7 @@ class _Fence(ArchComponent.Component):
                 print(placements)
                 print("-----------------------------------------------------\n")
         else:
-            placements = calculatePlacementsOnPath(rotation, pathwire, obj.NumberOfSections + 1, transformationVector,
-                                                   True)
+            placements = calculatePlacementsOnPath(rotation, pathwire, obj.NumberOfSections + 1, transformationVector, True)
             # The placement of the last object is always the second entry in the list.
             # So we move it to the end
             placements.append(placements.pop(1))
@@ -440,7 +482,7 @@ class _Fence(ArchComponent.Component):
         return placements
 
     def calculatePosts(self, obj, postPlacements):
-        import Draft, Part, PVPlantFoundation
+        import Draft, Part
 
         posts = []
         foundations = []
@@ -459,14 +501,10 @@ class _Fence(ArchComponent.Component):
 
         return posts, foundations
 
-    def calculateSections(self, obj, postPlacements, postLength, sectionLength):
+    def calculateSections(self, obj, postPlacements):
         import Part
 
         shapes = []
-
-        # For the colorization algorithm we have to store the number of faces for each section
-        # It is possible that a section is clipped. Then the number of faces is not equals to the
-        # number of faces in the original section
         faceNumbers = []
 
         offsetz = obj.MeshOffsetZ.Value
@@ -491,36 +529,17 @@ class _Fence(ArchComponent.Component):
                 print("  +++++ Start: ", startPlacement.Base, " - end: ", endPlacement.Base)
                 print("  +++++ algo: ", pointlist, "\n")
                 print("---------------------------------------------------\n")
-
-
         return (shapes, faceNumbers)
-
-    def clipSection(self, shape, length, clipLength):
-        import Part
-
-        boundBox = shape.BoundBox
-        lengthToCut = length - clipLength
-        halfLengthToCut = lengthToCut / 2
-
-        leftBox = Part.makeBox(halfLengthToCut, boundBox.YMax + 1, boundBox.ZMax + 1,
-                               FreeCAD.Vector(boundBox.XMin, boundBox.YMin, boundBox.ZMin))
-        rightBox = Part.makeBox(halfLengthToCut, boundBox.YMax + 1, boundBox.ZMax + 1,
-                                FreeCAD.Vector(boundBox.XMin + halfLengthToCut + clipLength, boundBox.YMin,
-                                               boundBox.ZMin))
-
-        newShape = shape.cut([leftBox, rightBox])
-        newBoundBox = newShape.BoundBox
-
-        newShape.translate(FreeCAD.Vector(-newBoundBox.XMin, 0, 0))
-
-        return newShape.removeSplitter()
 
     def calculatePathWire(self, obj):
         if obj.Base:
+            wire = None
             if hasattr(obj.Base.Shape, 'Wires') and obj.Base.Shape.Wires:
-                return obj.Base.Shape.Wires[0]
+                wire = obj.Base.Shape.Wires[0]
             elif obj.Base.Shape.Edges:
-                return Part.Wire(obj.Base.Shape.Edges)
+                wire = Part.Wire(obj.Base.Shape.Edges)
+
+            return wire
         return None
 
 
@@ -529,25 +548,70 @@ class _ViewProviderFence(ArchComponent.ViewProviderComponent):
 
     def __init__(self, vobj):
         ArchComponent.ViewProviderComponent.__init__(self, vobj)
-        # setProperties of ArchComponent will be overwritten
-        # thus setProperties from ArchComponent will be explicit called to get the properties
-        ArchComponent.ViewProviderComponent.setProperties(self, vobj)
-        self.setProperties(vobj)
-
-    def setProperties(self, vobj):
-        pl = vobj.PropertiesList
-
-        if not "UseOriginalColors" in pl:
-            vobj.addProperty("App::PropertyBool", "UseOriginalColors", "Fence", QT_TRANSLATE_NOOP(
-                "App::Property", "When true, the fence will be colored like the original post and section."))
-
-    def attach(self, vobj):
-        self.setProperties(vobj)
-
-        return super().attach(vobj)
 
     def getIcon(self):
         return str(os.path.join(DirIcons, "fence.svg"))
+
+    def attach(self, vobj):
+        '''
+        Create Object visuals in 3D view.
+        '''
+
+        # GeoCoords Node.
+        self.geo_coords = coin.SoGeoCoordinate()
+
+        # Surface features.
+        self.triangles = coin.SoIndexedFaceSet()
+        self.face_material = coin.SoMaterial()
+        self.edge_material = coin.SoMaterial()
+        self.edge_color = coin.SoBaseColor()
+        self.edge_style = coin.SoDrawStyle()
+        self.edge_style.style = coin.SoDrawStyle.LINES
+
+        shape_hints = coin.SoShapeHints()
+        shape_hints.vertex_ordering = coin.SoShapeHints.COUNTERCLOCKWISE
+        mat_binding = coin.SoMaterialBinding()
+        mat_binding.value = coin.SoMaterialBinding.PER_FACE
+        offset = coin.SoPolygonOffset()
+
+        # Face root.
+        faces = coin.SoSeparator()
+        faces.addChild(shape_hints)
+        faces.addChild(self.face_material)
+        faces.addChild(mat_binding)
+        faces.addChild(self.geo_coords)
+        faces.addChild(self.triangles)
+
+        # Highlight for selection.
+        highlight = coin.SoType.fromName('SoFCSelection').createInstance()
+        highlight.style = 'EMISSIVE_DIFFUSE'
+        faces.addChild(shape_hints)
+        highlight.addChild(self.edge_material)
+        highlight.addChild(mat_binding)
+        highlight.addChild(self.edge_style)
+        highlight.addChild(self.geo_coords)
+        highlight.addChild(self.triangles)
+
+    def updateData(self, obj, prop):
+        '''
+        Update Object visuals when a data property changed.
+        '''
+        origin = PVPlantSite.get()
+        base = copy.deepcopy(origin.Origin)
+        base.z = 0
+        print("  - Propiedad: ", prop)
+
+        if prop == "Shape":
+            shape = obj.getPropertyByName(prop)
+
+            # Get GeoOrigin.
+            points = [ver.Point for ver in shape.Vertexes]
+
+            # Set GeoCoords.
+            geo_system = ["UTM", origin.UtmZone, "FLAT"]
+            self.geo_coords.geoSystem.setValues(geo_system)
+            self.geo_coords.point.values = points
+
 
     def claimChildren(self):
         children = []
@@ -559,95 +623,6 @@ class _ViewProviderFence(ArchComponent.ViewProviderComponent):
             children.append(self.Object.Base)
 
         return children
-
-    def updateData(self, obj, prop):
-        colorProps = ["Shape", "Section", "Post", "Path", "Posts"]
-
-        if prop in colorProps:
-            self.applyColors(obj)
-        else:
-            super().updateData(obj, prop)
-
-    def onChanged(self, vobj, prop):
-        if prop == "UseOriginalColors":
-            self.applyColors(vobj.Object)
-        else:
-            super().onChanged(vobj, prop)
-
-    def applyColors(self, obj):
-
-        if not hasattr(obj.ViewObject, "UseOriginalColors") or not obj.ViewObject.UseOriginalColors:
-            obj.ViewObject.DiffuseColor = [obj.ViewObject.ShapeColor]
-        else:
-            post = obj.Post
-            ##section = obj.Section
-
-            numberOfPostFaces = len(post.Shape.Faces)
-            ##numberOfSectionFaces = len(section.Shape.Faces)
-
-            if hasattr(obj.Proxy, 'sectionFaceNumbers'):
-                sectionFaceNumbers = obj.Proxy.sectionFaceNumbers
-            else:
-                sectionFaceNumbers = [0]
-
-            if numberOfPostFaces == 0 or sum(sectionFaceNumbers) == 0:
-                return
-
-            postColors = self.normalizeColors(post, numberOfPostFaces)
-            ##defaultSectionColors = self.normalizeColors(section, numberOfSectionFaces)
-
-            ownColors = []
-
-            # At first all posts are added to the shape
-            for i in range(obj.NumberOfPosts):
-                ownColors.extend(postColors)
-
-            # Next all sections are added
-            '''
-            for i in range(obj.NumberOfSections):
-                actualSectionFaceCount = sectionFaceNumbers[i]
-
-                if actualSectionFaceCount == numberOfSectionFaces:
-                    ownColors.extend(defaultSectionColors)
-                else:
-                    ownColors.extend(self.normalizeColors(section, actualSectionFaceCount))
-            '''
-
-            viewObject = obj.ViewObject
-            viewObject.DiffuseColor = ownColors
-
-    def normalizeColors(self, obj, numberOfFaces):
-        colors = obj.ViewObject.DiffuseColor
-
-        if obj.TypeId == 'PartDesign::Body':
-            # When colorizing a PartDesign Body we have two options
-            # 1. The whole body got a shape color, that means the tip has only a single diffuse color set
-            #   so we use the shape color of the body
-            # 2. "Set colors" was called on the tip and the individual faces where colorized.
-            #   We use the diffuseColors of the tip in that case
-            tipColors = obj.Tip.ViewObject.DiffuseColor
-
-            if len(tipColors) > 1:
-                colors = tipColors
-
-        numberOfColors = len(colors)
-
-        if numberOfColors == 1:
-            return colors * numberOfFaces
-
-        colorsToUse = colors.copy()
-
-        if numberOfColors == numberOfFaces:
-            return colorsToUse
-        else:
-            # It is possible, that we have less faces than colors when something got clipped.
-            # Remove the unneeded colors at the beginning and end
-            halfNumberOfFacesToRemove = (numberOfColors - numberOfFaces) / 2
-            start = int(math.ceil(halfNumberOfFacesToRemove))
-            end = start + numberOfFaces
-
-            return colorsToUse[start:end]
-
 
 class _FenceTaskPanel:
     '''The TaskPanel to setup the fence'''

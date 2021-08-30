@@ -1,16 +1,33 @@
-import math
-import FreeCAD, Draft
+# /**********************************************************************
+# *                                                                     *
+# * Copyright (c) 2021 Javier Braña <javier.branagutierrez2@gmail.com>  *
+# *                                                                     *
+# * This program is free software; you can redistribute it and/or modify*
+# * it under the terms of the GNU Lesser General Public License (LGPL)  *
+# * as published by the Free Software Foundation; either version 2 of   *
+# * the License, or (at your option) any later version.                 *
+# * for detail see the LICENCE text file.                               *
+# *                                                                     *
+# * This program is distributed in the hope that it will be useful,     *
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of      *
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *
+# * GNU Library General Public License for more details.                *
+# *                                                                     *
+# * You should have received a copy of the GNU Library General Public   *
+# * License along with this program; if not, write to the Free Software *
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307*
+# * USA                                                                 *
+# *                                                                     *
+# ***********************************************************************
+
+import FreeCAD
 import ArchComponent
-import PVPlantSite, Part
+import Part
+import PVPlantSite
+import copy
 
 if FreeCAD.GuiUp:
     import FreeCADGui
-    from PySide import QtCore, QtGui, QtSvg
-    from DraftTools import translate
-    from PySide.QtCore import QT_TRANSLATE_NOOP
-
-    import Part
-    import pivy
     from pivy import coin
     import os
 else:
@@ -56,6 +73,8 @@ class _Terrain(ArchComponent.Component):
 
         site = PVPlantSite.get()
         site.Terrain = obj
+        obj.ViewObject.ShapeColor = (.0000, 0.6667, 0.4980)
+        obj.ViewObject.LineColor = (0.0000, 0.6000, 0.4392)
 
     def setProperties(self, obj):
         # Definicion de Propiedades:
@@ -154,19 +173,15 @@ class _Terrain(ArchComponent.Component):
                         "Surface",
                         "Use a Point Group to generate the surface")
 
-
-
         obj.addProperty("App::PropertyLinkList",
                         "AllowedAreas",
                         "Areas",
-                        "A boundary to delimitated the terrain").AllowedAreas=[]
+                        "A boundary to delimitated the terrain").AllowedAreas = []
 
         obj.addProperty("App::PropertyLinkList",
                         "ProhibitedAreas",
                         "Areas",
-                        "A boundary to delimitated the terrain").ProhibitedAreas=[]
-
-
+                        "A boundary to delimitated the terrain").ProhibitedAreas = []
 
     def __getstate__(self):
         return self.Type
@@ -288,6 +303,8 @@ class _Terrain(ArchComponent.Component):
                 if len(bnd.Faces) == 0:
                     bnd = Part.Face(bnd)
 
+                # TODO: not use the first point, else the Origin in "Site".
+                #  It is standar for everything.
                 firstPoint = self.obj.PointsGroup.Points.Points[0]
                 nbase = FreeCAD.Vector(firstPoint.x, firstPoint.y, firstPoint.z)
                 data = []
@@ -303,8 +320,8 @@ class _Terrain(ArchComponent.Component):
 
                 import PVPlantCreateTerrainMesh
                 mesh = PVPlantCreateTerrainMesh.Triangulate(Data)
-                mesh.Placement.move(nbase)
                 shape = PVPlantCreateTerrainMesh.MeshToShape(mesh)
+                shape.Placement.move(nbase)
 
                 obj.Shape = shape
                 if obj.DEM:
@@ -314,13 +331,11 @@ class _Terrain(ArchComponent.Component):
         print("  -----  Terrain  -  EXECUTE  ----------")
 
 
-
 class _ViewProviderTerrain(ArchComponent.ViewProviderComponent):
     "A View Provider for the Pipe object"
 
     def __init__(self, vobj):
         ArchComponent.ViewProviderComponent.__init__(self, vobj)
-        self.Object = vobj.Object
         vobj.Proxy = self
 
     def getIcon(self):
@@ -330,9 +345,65 @@ class _ViewProviderTerrain(ArchComponent.ViewProviderComponent):
         '''
         Create Object visuals in 3D view.
         '''
+
         # GeoCoords Node.
         self.geo_coords = coin.SoGeoCoordinate()
-        self.Object = vobj.Object
+
+        # Surface features.
+        self.triangles = coin.SoIndexedFaceSet()
+        # print(self.triangles)
+        self.face_material = coin.SoMaterial()
+        self.edge_material = coin.SoMaterial()
+        self.edge_color = coin.SoBaseColor()
+        self.edge_style = coin.SoDrawStyle()
+        self.edge_style.style = coin.SoDrawStyle.LINES
+
+        shape_hints = coin.SoShapeHints()
+        shape_hints.vertex_ordering = coin.SoShapeHints.COUNTERCLOCKWISE
+        mat_binding = coin.SoMaterialBinding()
+        mat_binding.value = coin.SoMaterialBinding.PER_FACE
+        offset = coin.SoPolygonOffset()
+
+        # Face root.
+        faces = coin.SoSeparator()
+        faces.addChild(shape_hints)
+        faces.addChild(self.face_material)
+        faces.addChild(mat_binding)
+        faces.addChild(self.geo_coords)
+        faces.addChild(self.triangles)
+
+        # Highlight for selection.
+        highlight = coin.SoType.fromName('SoFCSelection').createInstance()
+        highlight.style = 'EMISSIVE_DIFFUSE'
+        faces.addChild(shape_hints)
+        highlight.addChild(self.edge_material)
+        highlight.addChild(mat_binding)
+        highlight.addChild(self.edge_style)
+        highlight.addChild(self.geo_coords)
+        highlight.addChild(self.triangles)
+
+    def updateData(self, obj, prop):
+        '''
+        Update Object visuals when a data property changed.
+        '''
+        origin = PVPlantSite.get()
+        base = copy.deepcopy(origin.Origin)
+        base.z = 0
+
+        # Set geosystem.
+        geo_system = ["UTM", origin.UtmZone, "FLAT"]
+        self.geo_coords.geoSystem.setValues(geo_system)
+        '''
+        self.boundary_coords.geoSystem.setValues(geo_system)
+        self.major_coords.geoSystem.setValues(geo_system)
+        self.minor_coords.geoSystem.setValues(geo_system)
+        '''
+
+        if prop == "Shape":
+            shape = obj.getPropertyByName(prop)
+            # Get GeoOrigin.
+            points = [ver.Point for ver in shape.Vertexes]
+            self.geo_coords.point.values = points
 
     def claimChildren(self):
         """Define which objects will appear as children in the tree view.
@@ -348,13 +419,13 @@ class _ViewProviderTerrain(ArchComponent.ViewProviderComponent):
             The objects claimed as children.
         """
 
-        return [self.Object.CuttingBoundary,]
+        return [self.Object.CuttingBoundary, ]
 
 
 class _TerrainTaskPanel:
 
     def __init__(self):
-        self.form = FreeCADGui.PySideUic.loadUi(__dir__ + "/PVPlantRack.ui")
+        self.form = FreeCADGui.PySideUic.loadUi(__dir__ + "/PVPlantTerrain.ui")
 
     def accept(self):
         makeTerrain()
@@ -374,9 +445,9 @@ class _CommandTerrain:
         return {'Pixmap': str(os.path.join(DirIcons, "terrain.svg")),
                 'MenuText': "Terrain",
                 'Accel': "S, T",
-                'ToolTip':"Creates a Terrain object from setup dialog."}
+                'ToolTip': "Creates a Terrain object from setup dialog."}
 
-    #def IsActive(self):
+    # def IsActive(self):
     #    return not FreeCAD.ActiveDocument is None
 
     def IsActive(self):
@@ -385,8 +456,9 @@ class _CommandTerrain:
         return True
 
     def Activated(self):
-        task = _TerrainTaskPanel()
-        FreeCADGui.Control.showDialog(task)
+        makeTerrain()
+        # task = _TerrainTaskPanel()
+        # FreeCADGui.Control.showDialog(task)
         return
 
 

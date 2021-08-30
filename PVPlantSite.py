@@ -1,32 +1,28 @@
-## Based on ARCSite from Yorik van Havre
+# /**********************************************************************
+# *                                                                     *
+# * Copyright (c) 2021 Javier Braña <javier.branagutierrez2@gmail.com>  *
+# *                                                                     *
+# * This program is free software; you can redistribute it and/or modify*
+# * it under the terms of the GNU Lesser General Public License (LGPL)  *
+# * as published by the Free Software Foundation; either version 2 of   *
+# * the License, or (at your option) any later version.                 *
+# * for detail see the LICENCE text file.                               *
+# *                                                                     *
+# * This program is distributed in the hope that it will be useful,     *
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of      *
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *
+# * GNU Library General Public License for more details.                *
+# *                                                                     *
+# * You should have received a copy of the GNU Library General Public   *
+# * License along with this program; if not, write to the Free Software *
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307*
+# * USA                                                                 *
+# *                                                                     *
+# ***********************************************************************
 
-# -*- coding: utf8 -*-
-
-#***************************************************************************
-#*                                                                         *
-#*   Copyright (c) 2011                                                    *
-#*   Yorik van Havre <yorik@uncreated.net>                                 *
-#*                                                                         *
-#*   This program is free software; you can redistribute it and/or modify  *
-#*   it under the terms of the GNU Lesser General Public License (LGPL)    *
-#*   as published by the Free Software Foundation; either version 2 of     *
-#*   the License, or (at your option) any later version.                   *
-#*   for detail see the LICENCE text file.                                 *
-#*                                                                         *
-#*   This program is distributed in the hope that it will be useful,       *
-#*   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
-#*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
-#*   GNU Library General Public License for more details.                  *
-#*                                                                         *
-#*   You should have received a copy of the GNU Library General Public     *
-#*   License along with this program; if not, write to the Free Software   *
-#*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  *
-#*   USA                                                                         *
-#*                                                                         *
-#***************************************************************************
-
-import FreeCAD,Draft,ArchCommands,ArchFloor,math,re,datetime
+import FreeCAD, Draft, ArchCommands, ArchFloor, math, datetime
 import ArchSite
+
 if FreeCAD.GuiUp:
     import FreeCADGui
     from PySide import QtCore, QtGui
@@ -36,18 +32,42 @@ if FreeCAD.GuiUp:
 
 else:
     # \cond
-    def translate(ctxt,txt):
+    def translate(ctxt, txt):
         return txt
-    def QT_TRANSLATE_NOOP(ctxt,txt):
+
+
+    def QT_TRANSLATE_NOOP(ctxt, txt):
         return txt
     # \endcond
 
 import os
 from PVPlantResources import DirIcons as DirIcons
 
-__title__="FreeCAD Site"
+__title__ = "FreeCAD Site"
 __author__ = ""
 __url__ = "http://www.freecadweb.org"
+
+zone_list = ["Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7", "Z8", "Z9", "Z10", "Z11", "Z12",
+             "Z13", "Z14", "Z15", "Z16", "Z17", "Z18", "Z19", "Z20", "Z21", "Z22", "Z23", "Z24",
+             "Z25", "Z26", "Z27", "Z28", "Z29", "Z30", "Z31", "Z32", "Z33", "Z34", "Z35", "Z36",
+             "Z37", "Z38", "Z39", "Z40", "Z41", "Z42", "Z43", "Z44", "Z45", "Z46", "Z47", "Z48",
+             "Z49", "Z50", "Z51", "Z52", "Z53", "Z54", "Z55", "Z56", "Z57", "Z58", "Z59", "Z60"]
+
+
+def get(origin=FreeCAD.Vector(0, 0, 0)):
+    """
+    Find the existing Site object
+    """
+    # Return an existing instance of the same name, if found.
+    obj = FreeCAD.ActiveDocument.getObject('Site')
+
+    if obj:
+        if obj.Origin == FreeCAD.Vector(0, 0, 0):
+            obj.Origin = origin
+        return obj
+
+    obj = makePVPlantSite()
+    return obj
 
 
 def PartToWire(part):
@@ -60,7 +80,6 @@ def PartToWire(part):
     PointList.append(edges[-1].Vertexes[-1].Point)
 
     Draft.makeWire(PointList, closed=True, face=None, support=None)
-
 
 
 def projectWireOnMesh(Boundary, Mesh):
@@ -78,7 +97,7 @@ def projectWireOnMesh(Boundary, Mesh):
         Draft.makeWire(PointList, closed=True, face=None, support=None)
         FreeCAD.activeDocument().recompute()
 
-    else:                ## posible código:
+    else:  ## posible código:
         import MeshPart
 
         CopyMesh = Mesh.copy()
@@ -96,17 +115,18 @@ def projectWireOnMesh(Boundary, Mesh):
 
         for i in Section[0]:
             Pwire = Draft.makeWire(i)
-            #Pwire.Placement.move(Base)
+            # Pwire.Placement.move(Base)
             ##SectionGroup.addObject(Pwire)
 
         FreeCAD.ActiveDocument.recompute()
+
 
 def makePVPlantSite(objectslist=None, baseobj=None, name="Site"):
     '''makeBuilding(objectslist): creates a site including the
     objects from the given list.'''
     import Part
-    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython",name)
-    obj.Label = translate("Arch",name)
+    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Site")
+    obj.Label = translate("Arch", name)
     _PVPlantSite(obj)
     if FreeCAD.GuiUp:
         _ViewProviderSite(obj.ViewObject)
@@ -114,15 +134,14 @@ def makePVPlantSite(objectslist=None, baseobj=None, name="Site"):
         obj.Group = objectslist
     if baseobj:
         import Part
-        if isinstance(baseobj,Part.Shape):
+        if isinstance(baseobj, Part.Shape):
             obj.Shape = baseobj
         else:
             obj.Terrain = baseobj
     return obj
 
 
-def makeSolarDiagram(longitude,latitude,scale=1,complete=False,tz=None):
-
+def makeSolarDiagram(longitude, latitude, scale=1, complete=False, tz=None):
     """makeSolarDiagram(longitude,latitude,[scale,complete,tz]):
     returns a solar diagram as a pivy node. If complete is
     True, the 12 months are drawn. Tz is the timezone related to
@@ -153,7 +172,7 @@ def makeSolarDiagram(longitude,latitude,scale=1,complete=False,tz=None):
         else:
             tz = datetime.timezone.utc
     else:
-        loc = ladybug.location.Location(latitude=latitude,longitude=longitude,time_zone=tz)
+        loc = ladybug.location.Location(latitude=latitude, longitude=longitude, time_zone=tz)
         sunpath = ladybug.sunpath.Sunpath.from_location(loc)
 
     from pivy import coin
@@ -169,23 +188,23 @@ def makeSolarDiagram(longitude,latitude,scale=1,complete=False,tz=None):
 
     # build the base circle + number positions
     import Part
-    for i in range(1,9):
-        circles.append(Part.makeCircle(scale*(i/8.0)))
-    for ad in range(0,360,15):
+    for i in range(1, 9):
+        circles.append(Part.makeCircle(scale * (i / 8.0)))
+    for ad in range(0, 360, 15):
         a = math.radians(ad)
-        p1 = FreeCAD.Vector(math.cos(a)*scale,math.sin(a)*scale,0)
-        p2 = FreeCAD.Vector(math.cos(a)*scale*0.125,math.sin(a)*scale*0.125,0)
-        p3 = FreeCAD.Vector(math.cos(a)*scale*1.08,math.sin(a)*scale*1.08,0)
-        circles.append(Part.LineSegment(p1,p2).toShape())
-        circlepos.append((ad,p3))
+        p1 = FreeCAD.Vector(math.cos(a) * scale, math.sin(a) * scale, 0)
+        p2 = FreeCAD.Vector(math.cos(a) * scale * 0.125, math.sin(a) * scale * 0.125, 0)
+        p3 = FreeCAD.Vector(math.cos(a) * scale * 1.08, math.sin(a) * scale * 1.08, 0)
+        circles.append(Part.LineSegment(p1, p2).toShape())
+        circlepos.append((ad, p3))
 
     # build the sun curves at solstices and equinoxe
     year = datetime.datetime.now().year
-    hpts = [ [] for i in range(24) ]
-    m = [(6,21),(7,21),(8,21),(9,21),(10,21),(11,21),(12,21)]
+    hpts = [[] for i in range(24)]
+    m = [(6, 21), (7, 21), (8, 21), (9, 21), (10, 21), (11, 21), (12, 21)]
     if complete:
-        m.extend([(1,21),(2,21),(3,21),(4,21),(5,21)])
-    for i,d in enumerate(m):
+        m.extend([(1, 21), (2, 21), (3, 21), (4, 21), (5, 21)])
+    for i, d in enumerate(m):
         pts = []
         for h in range(24):
             if ladybug:
@@ -196,28 +215,28 @@ def makeSolarDiagram(longitude,latitude,scale=1,complete=False,tz=None):
                 dt = datetime.datetime(year, d[0], d[1], h)
                 alt = math.radians(pysolar.solar.GetAltitudeFast(latitude, longitude, dt))
                 az = pysolar.solar.GetAzimuth(latitude, longitude, dt)
-                az = -90 + az # pysolar's zero is south, ours is X direction
+                az = -90 + az  # pysolar's zero is south, ours is X direction
             else:
                 dt = datetime.datetime(year, d[0], d[1], h, tzinfo=tz)
                 alt = math.radians(pysolar.solar.get_altitude_fast(latitude, longitude, dt))
                 az = pysolar.solar.get_azimuth(latitude, longitude, dt)
-                az = 90 + az # pysolar's zero is north, ours is X direction
+                az = 90 + az  # pysolar's zero is north, ours is X direction
             if az < 0:
                 az = 360 + az
             az = math.radians(az)
-            zc = math.sin(alt)*scale
-            ic = math.cos(alt)*scale
-            xc = math.cos(az)*ic
-            yc = math.sin(az)*ic
-            p = FreeCAD.Vector(xc,yc,zc)
+            zc = math.sin(alt) * scale
+            ic = math.cos(alt) * scale
+            xc = math.cos(az) * ic
+            yc = math.sin(az) * ic
+            p = FreeCAD.Vector(xc, yc, zc)
             pts.append(p)
             hpts[h].append(p)
-            if i in [0,6]:
+            if i in [0, 6]:
                 ep = FreeCAD.Vector(p)
                 ep.multiply(1.08)
                 if ep.z >= 0:
                     if not oldversion:
-                        h = 24-h # not sure why this is needed now... But it is.
+                        h = 24 - h  # not sure why this is needed now... But it is.
                     if h == 12:
                         if i == 0:
                             h = "SUMMER"
@@ -228,7 +247,7 @@ def makeSolarDiagram(longitude,latitude,scale=1,complete=False,tz=None):
                                 h = "WINTER"
                             else:
                                 h = "SUMMER"
-                    hourpos.append((h,ep))
+                    hourpos.append((h, ep))
         if i < 7:
             sunpaths.append(Part.makePolygon(pts))
 
@@ -238,14 +257,14 @@ def makeSolarDiagram(longitude,latitude,scale=1,complete=False,tz=None):
         hourpaths.append(Part.makePolygon(h))
 
     # cut underground lines
-    sz = 2.1*scale
-    cube = Part.makeBox(sz,sz,sz)
-    cube.translate(FreeCAD.Vector(-sz/2,-sz/2,-sz))
+    sz = 2.1 * scale
+    cube = Part.makeBox(sz, sz, sz)
+    cube.translate(FreeCAD.Vector(-sz / 2, -sz / 2, -sz))
     sunpaths = [sp.cut(cube) for sp in sunpaths]
     hourpaths = [hp.cut(cube) for hp in hourpaths]
 
     # build nodes
-    ts = 0.005*scale # text scale
+    ts = 0.005 * scale  # text scale
     mastersep = coin.SoSeparator()
     circlesep = coin.SoSeparator()
     numsep = coin.SoSeparator()
@@ -266,7 +285,7 @@ def makeSolarDiagram(longitude,latitude,scale=1,complete=False,tz=None):
             hoursep.addChild(toNode(w))
     for p in circlepos:
         text = coin.SoText2()
-        s = p[0]-90
+        s = p[0] - 90
         s = -s
         if s > 360:
             s = s - 360
@@ -285,8 +304,8 @@ def makeSolarDiagram(longitude,latitude,scale=1,complete=False,tz=None):
         text.string = s
         text.justification = coin.SoText2.CENTER
         coords = coin.SoTransform()
-        coords.translation.setValue([p[1].x,p[1].y,p[1].z])
-        coords.scaleFactor.setValue([ts,ts,ts])
+        coords.translation.setValue([p[1].x, p[1].y, p[1].z])
+        coords.scaleFactor.setValue([ts, ts, ts])
         item = coin.SoSeparator()
         item.addChild(coords)
         item.addChild(text)
@@ -297,8 +316,8 @@ def makeSolarDiagram(longitude,latitude,scale=1,complete=False,tz=None):
         text.string = s
         text.justification = coin.SoText2.CENTER
         coords = coin.SoTransform()
-        coords.translation.setValue([p[1].x,p[1].y,p[1].z])
-        coords.scaleFactor.setValue([ts,ts,ts])
+        coords.translation.setValue([p[1].x, p[1].y, p[1].z])
+        coords.scaleFactor.setValue([ts, ts, ts])
         item = coin.SoSeparator()
         item.addChild(coords)
         item.addChild(text)
@@ -306,8 +325,7 @@ def makeSolarDiagram(longitude,latitude,scale=1,complete=False,tz=None):
     return mastersep
 
 
-def makeWindRose(epwfile,scale=1,sectors=24):
-
+def makeWindRose(epwfile, scale=1, sectors=24):
     """makeWindRose(site,sectors):
     returns a wind rose diagram as a pivy node"""
 
@@ -321,41 +339,41 @@ def makeWindRose(epwfile,scale=1,sectors=24):
         FreeCAD.Console.PrintWarning("No EPW file, unable to generate wind rose.\n")
         return None
     epw_data = ladybug.epw.EPW(epwfile)
-    baseangle = 360/sectors
-    sectorangles = [i * baseangle for i in range(sectors)] # the divider angles between each sector
-    basebissect = baseangle/2
-    angles = [basebissect] # build a list of central direction for each sector
-    for i in range(1,sectors):
-        angles.append(angles[-1]+baseangle)
-    windsbysector = [0 for i in range(sectors)] # prepare a holder for values for each sector
+    baseangle = 360 / sectors
+    sectorangles = [i * baseangle for i in range(sectors)]  # the divider angles between each sector
+    basebissect = baseangle / 2
+    angles = [basebissect]  # build a list of central direction for each sector
+    for i in range(1, sectors):
+        angles.append(angles[-1] + baseangle)
+    windsbysector = [0 for i in range(sectors)]  # prepare a holder for values for each sector
     for hour in epw_data.wind_direction:
-        sector = min(angles, key=lambda x:abs(x-hour)) # find the closest sector angle
+        sector = min(angles, key=lambda x: abs(x - hour))  # find the closest sector angle
         sectorindex = angles.index(sector)
         windsbysector[sectorindex] = windsbysector[sectorindex] + 1
     maxwind = max(windsbysector)
-    windsbysector = [wind/maxwind for wind in windsbysector] # normalize
-    vectors = [] # create 3D vectors
+    windsbysector = [wind / maxwind for wind in windsbysector]  # normalize
+    vectors = []  # create 3D vectors
     dividers = []
     for i in range(sectors):
         angle = math.radians(90 + angles[i])
         x = math.cos(angle) * windsbysector[i] * scale
         y = math.sin(angle) * windsbysector[i] * scale
-        vectors.append(FreeCAD.Vector(x,y,0))
+        vectors.append(FreeCAD.Vector(x, y, 0))
         secangle = math.radians(90 + sectorangles[i])
         x = math.cos(secangle) * scale
         y = math.sin(secangle) * scale
-        dividers.append(FreeCAD.Vector(x,y,0))
+        dividers.append(FreeCAD.Vector(x, y, 0))
     vectors.append(vectors[0])
 
     # build coin node
     import Part
     from pivy import coin
     masternode = coin.SoSeparator()
-    for r in (0.25,0.5,0.75,1.0):
+    for r in (0.25, 0.5, 0.75, 1.0):
         c = Part.makeCircle(r * scale)
         masternode.addChild(toNode(c))
     for divider in dividers:
-        l = Part.makeLine(FreeCAD.Vector(),divider)
+        l = Part.makeLine(FreeCAD.Vector(), divider)
         masternode.addChild(toNode(l))
     ds = coin.SoDrawStyle()
     ds.lineWidth = 2.0
@@ -363,7 +381,6 @@ def makeWindRose(epwfile,scale=1,sectors=24):
     d = Part.makePolygon(vectors)
     masternode.addChild(toNode(d))
     return masternode
-
 
 
 # Values in mm
@@ -388,7 +405,7 @@ class Compass(object):
         self.transform.rotation.setValue(
             coin.SbVec3f(0, 0, 1), math.radians(angleInDegrees))
 
-    def locate(self, x,y,z):
+    def locate(self, x, y, z):
         from pivy import coin
         self.transform.translation.setValue(x, y, z)
 
@@ -514,21 +531,22 @@ class Compass(object):
         return coords
 
 
-
-zone_list = ["Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7", "Z8", "Z9", "Z10", "Z11", "Z12",
-    "Z13", "Z14", "Z15", "Z16", "Z17", "Z18", "Z19", "Z20", "Z21", "Z22", "Z23", "Z24",
-    "Z25", "Z26", "Z27", "Z28", "Z29", "Z30", "Z31", "Z32", "Z33", "Z34", "Z35", "Z36",
-    "Z37", "Z38", "Z39", "Z40", "Z41", "Z42", "Z43", "Z44", "Z45", "Z46", "Z47", "Z48",
-    "Z49", "Z50", "Z51", "Z52", "Z53", "Z54", "Z55", "Z56", "Z57", "Z58", "Z59", "Z60"]
-
 class _PVPlantSite(ArchSite._Site):
-
     "The Site object"
 
     def __init__(self, obj):
         ArchSite._Site.__init__(self, obj)
 
         self.obj = obj
+        # self.setProperties(obj)
+        self.Type = "Site"
+        obj.Proxy = self
+        obj.IfcType = "Site"
+        obj.setEditorMode("IfcType", 1)
+
+    def setProperties(self, obj):
+        # Definicion de Propiedades:
+        ArchSite._Site.setProperties(self, obj)
 
         obj.addProperty("App::PropertyLink",
                         "Boundary",
@@ -550,13 +568,38 @@ class _PVPlantSite(ArchSite._Site):
                         "Base",
                         "Origin point.").Origin = (0, 0, 0)
 
-        self.Type = "PVPlatSite"
+    def onDocumentRestored(self, obj):
+        """Method run when the document is restored. Re-adds the properties."""
+        self.obj = obj
+        self.Type = "Site"
+        obj.Proxy = self
+
+    def onChanged(self, obj, prop):
+        ArchSite._Site.onChanged(self, obj, prop)
+        if (prop == "Terrain") or (prop == "Boundary"):
+            if obj.Terrain and obj.Boundary:
+                # TODO: Definir los objetos que se pueden proyectar
+                # if obj.Boundary.TypeId == 'Part::Part2DObject':
+                # projectWireOnMesh(obj.Boundary, obj.Terrain.Mesh)
+                print("Calcular 3D boundary")
+
+        if prop == "UtmZone":
+            node = self.get_geoorigin()
+            zone = obj.getPropertyByName("UtmZone")
+            geo_system = ["UTM", zone, "FLAT"]
+            node.geoSystem.setValues(geo_system)
+
+        if prop == "Origin":
+            node = self.get_geoorigin()
+            origin = obj.getPropertyByName("Origin")
+            node.geoCoords.setValue(origin.x, origin.y, 0)
+            obj.Placement.Base = obj.getPropertyByName(prop)
 
     def execute(self, obj):
 
         return
 
-        if not obj.isDerivedFrom("Part::Feature"): # old-style Site
+        if not obj.isDerivedFrom("Part::Feature"):  # old-style Site
             return
 
         pl = obj.Placement
@@ -595,35 +638,7 @@ class _PVPlantSite(ArchSite._Site):
                         obj.Placement = pl
                     self.computeAreas(obj)
 
-    def onChanged(self, obj, prop):
-        ArchSite._Site.onChanged(self, obj, prop)
-        if (prop == "Terrain") or (prop == "Boundary"):
-            if obj.Terrain and obj.Boundary:
-                # TODO: Definir los objetos que se pueden proyectar
-                #if obj.Boundary.TypeId == 'Part::Part2DObject':
-                #projectWireOnMesh(obj.Boundary, obj.Terrain.Mesh)
-                print("Calcular 3D boundary")
-        '''
-        if prop == "Terrain":
-            if obj.Terrain:
-                if FreeCAD.GuiUp:
-                    obj.Terrain.ViewObject.hide()
-                self.execute(obj)
-        '''
-
-        node = self.get_geoorigin()
-
-        if prop == "UtmZone":
-            zone = obj.getPropertyByName("UtmZone")
-            geo_system = ["UTM", zone, "FLAT"]
-            node.geoSystem.setValues(geo_system)
-
-        if prop == "Origin":
-            origin = obj.getPropertyByName("Origin")
-            node.geoCoords.setValue(origin.x, origin.y, 0)
-
-
-    def computeAreas(self,obj):
+    def computeAreas(self, obj):
         ArchSite._Site.computeAreas(self, obj)
         return
 
@@ -635,25 +650,25 @@ class _PVPlantSite(ArchSite._Site):
             return
         if not obj.Shape.Faces:
             return
-        if not hasattr(obj,"Perimeter"): # check we have a latest version site
+        if not hasattr(obj, "Perimeter"):  # check we have a latest version site
             return
         if not obj.Terrain:
             return
         # compute area
         fset = []
         for f in obj.Shape.Faces:
-            if f.normalAt(0,0).getAngle(FreeCAD.Vector(0,0,1)) < 1.5707:
+            if f.normalAt(0, 0).getAngle(FreeCAD.Vector(0, 0, 1)) < 1.5707:
                 fset.append(f)
         if fset:
-            import Drawing,Part
+            import Drawing, Part
             pset = []
             for f in fset:
                 try:
-                    pf = Part.Face(Part.Wire(Drawing.project(f,FreeCAD.Vector(0,0,1))[0].Edges))
+                    pf = Part.Face(Part.Wire(Drawing.project(f, FreeCAD.Vector(0, 0, 1))[0].Edges))
                 except Part.OCCError:
                     # error in computing the area. Better set it to zero than show a wrong value
                     if obj.ProjectedArea.Value != 0:
-                        print("Error computing areas for ",obj.Label)
+                        print("Error computing areas for ", obj.Label)
                         obj.ProjectedArea = 0
                 else:
                     pset.append(pf)
@@ -667,14 +682,14 @@ class _PVPlantSite(ArchSite._Site):
         # compute perimeter
         lut = {}
         for e in obj.Shape.Edges:
-            lut.setdefault(e.hashCode(),[]).append(e)
+            lut.setdefault(e.hashCode(), []).append(e)
         l = 0
         for e in lut.values():
-            if len(e) == 1: # keep only border edges
+            if len(e) == 1:  # keep only border edges
                 l += e[0].Length
         if l:
-                if obj.Perimeter.Value != l:
-                    obj.Perimeter = l
+            if obj.Perimeter.Value != l:
+                obj.Perimeter = l
         # compute volumes
         if obj.Terrain.Shape.Solids:
             shapesolid = obj.Terrain.Shape.copy()
@@ -691,10 +706,32 @@ class _PVPlantSite(ArchSite._Site):
         if obj.AdditionVolume.Value != addvol:
             obj.AdditionVolume = addvol
 
+    # Nuevo:
+    def checkGeo(self):
+        print(self.__getstate__())
 
+    def __getstate__(self):
+        """
+        Save variables to file.
+        """
+        node = self.get_geoorigin()
+        system = node.geoSystem.getValues()
+        x, y, z = node.geoCoords.getValue().getValue()
+        return system, [x, y, z]
 
+    def __setstate__(self, state):
+        """
+        Get variables from file.
+        """
+        print("State: ", state)
+        if state:
+            system = state[0]
+            origin = state[1]
+            node = self.get_geoorigin()
 
-    # Nuevo hecho por mí:
+            node.geoSystem.setValues(system)
+            node.geoCoords.setValue(origin[0], origin[1], 0)
+
     def get_geoorigin(self):
         sg = FreeCADGui.ActiveDocument.ActiveView.getSceneGraph()
         node = sg.getChild(0)
@@ -702,13 +739,13 @@ class _PVPlantSite(ArchSite._Site):
         if not isinstance(node, coin.SoGeoOrigin):
             node = coin.SoGeoOrigin()
             sg.insertChild(node, 0)
-
         return node
 
     def setLatLon(self, lat, lon):
         import utm
         x, y, zone_number, zone_letter = utm.from_latlon(lat, lon)
         self.obj.UtmZone = zone_list[zone_number - 1]
+        # self.obj.UtmZone = "Z"+str(zone_number)
         self.obj.Origin = (x, y, 0.0)
 
 
@@ -747,23 +784,14 @@ class _ViewProviderSite(ArchSite._ViewProviderSite):
             The objects claimed as children.
         """
 
-        ArchSite._ViewProviderSite.claimChildren(self)
-
         objs = []
-        if hasattr(self,"Object"):
+        if hasattr(self, "Object"):
             objs = self.Object.Group + \
                    [self.Object.Terrain, self.Object.Boundary, self.Object.Frames]
             if hasattr(self.Object, "Frames"):
                 objs.extend(self.Object.Frames)
-            prefs = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Arch")
-            '''
-            if hasattr(self.Object,"Additions") and prefs.GetBool("swallowAdditions",True):
-                objs.extend(self.Object.Additions)
-            if hasattr(self.Object,"Subtractions") and prefs.GetBool("swallowSubtractions",True):
-                objs.extend(self.Object.Subtractions)
-            '''
-        return objs
 
+        return objs
 
 
 '''
@@ -1115,16 +1143,16 @@ class _ViewProviderSite:
 
 '''
 
-class _CommandPVPlantSite:
 
+class _CommandPVPlantSite:
     "the Arch Site command definition"
 
     def GetResources(self):
 
         return {'Pixmap': str(os.path.join(DirIcons, "solar-panel.svg")),
-                'MenuText': QT_TRANSLATE_NOOP("Arch_Site","Site"),
+                'MenuText': QT_TRANSLATE_NOOP("Arch_Site", "Site"),
                 'Accel': "S, I",
-                'ToolTip': QT_TRANSLATE_NOOP("Arch_Site","Creates a site object including selected objects.")}
+                'ToolTip': QT_TRANSLATE_NOOP("Arch_Site", "Creates a site object including selected objects.")}
 
     def IsActive(self):
 
@@ -1137,35 +1165,35 @@ class _CommandPVPlantSite:
 
         sel = FreeCADGui.Selection.getSelection()
         p = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Arch")
-        link = p.GetBool("FreeLinking",False)
+        link = p.GetBool("FreeLinking", False)
         siteobj = []
         warning = False
-        for obj in sel :
-            if (Draft.getType(obj) == "Building") or (hasattr(obj,"IfcType") and obj.IfcType == "Building"):
+        for obj in sel:
+            if (Draft.getType(obj) == "Building") or (hasattr(obj, "IfcType") and obj.IfcType == "Building"):
                 siteobj.append(obj)
-            else :
-                if link == True :
+            else:
+                if link == True:
                     siteobj.append(obj)
                 else:
                     warning = True
-        if warning :
-            message = translate( "Arch" ,  "Please either select only Building objects or nothing at all!\n\
+        if warning:
+            message = translate("Arch", "Please either select only Building objects or nothing at all!\n\
 Site is not allowed to accept any other object besides Building.\n\
 Other objects will be removed from the selection.\n\
 Note: You can change that in the preferences.")
-            ArchCommands.printMessage( message )
+            ArchCommands.printMessage(message)
         if sel and len(siteobj) == 0:
-            message = translate( "Arch" ,  "There is no valid object in the selection.\n\
+            message = translate("Arch", "There is no valid object in the selection.\n\
 Site creation aborted.") + "\n"
-            ArchCommands.printMessage( message )
-        else :
+            ArchCommands.printMessage(message)
+        else:
             ss = "[ "
             for o in siteobj:
                 ss += "FreeCAD.ActiveDocument." + o.Name + ", "
             ss += "]"
-            FreeCAD.ActiveDocument.openTransaction(translate("Arch","Create Site"))
+            FreeCAD.ActiveDocument.openTransaction(translate("Arch", "Create Site"))
             FreeCADGui.addModule("Arch")
-            FreeCADGui.doCommand("obj = PVPlant.makePVPlantSite("+ss+")")
+            FreeCADGui.doCommand("obj = PVPlant.makePVPlantSite(" + ss + ")")
             FreeCADGui.addModule("Draft")
             FreeCADGui.doCommand("Draft.autogroup(obj)")
             FreeCAD.ActiveDocument.commitTransaction()

@@ -1,21 +1,31 @@
-'''import heights'''
-# -*- coding: utf-8 -*-
-# -------------------------------------------------
-# -- google heights importer
-# --
-# -- microelly 2016 v 0.3
-# --
-# -- GNU Lesser General Public License (LGPL)
-# -------------------------------------------------
+# /**********************************************************************
+# *                                                                     *
+# * Copyright (c) 2021 Javier Braña <javier.branagutierrez2@gmail.com>  *
+# *                                                                     *
+# * This program is free software; you can redistribute it and/or modify*
+# * it under the terms of the GNU Lesser General Public License (LGPL)  *
+# * as published by the Free Software Foundation; either version 2 of   *
+# * the License, or (at your option) any later version.                 *
+# * for detail see the LICENCE text file.                               *
+# *                                                                     *
+# * This program is distributed in the hope that it will be useful,     *
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of      *
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *
+# * GNU Library General Public License for more details.                *
+# *                                                                     *
+# * You should have received a copy of the GNU Library General Public   *
+# * License along with this program; if not, write to the Free Software *
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307*
+# * USA                                                                 *
+# *                                                                     *
+# ***********************************************************************
 
 import FreeCAD, FreeCADGui, Draft
 
 import urllib.request, json
 from PySide import QtCore, QtGui, QtSvg
 from PySide.QtCore import QT_TRANSLATE_NOOP
-from urllib import request
-import pivy
-from pivy import coin
+
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -25,14 +35,8 @@ except AttributeError:
 
 import os
 from PVPlantResources import DirIcons as DirIcons
+import PVPlantSite
 
-
-#from geodat.transversmercator import TransverseMercator
-#tm = TransverseMercator()
-
-# info:
-#   -- Latitud = y
-#   -- Longitud = x
 
 
 def getSinglePointElevationFromBing(lat, lng):
@@ -388,6 +392,7 @@ class _ImportPointsTaskPanel:
 
     def __init__(self, obj = None):
         self.obj = None
+        self.Boundary = None
         self.select = 0
         self.filename = ""
 
@@ -399,7 +404,12 @@ class _ImportPointsTaskPanel:
         #self.form.buttonAdd.clicked.connect(self.add)
         self.form1.buttonDEM.clicked.connect(self.openFileDEM)
 
-        self.form = [self.form1, FreeCADGui.PySideUic.loadUi(os.path.dirname(__file__) + "/PVPlantCreateTerrainMesh.ui")]
+        self.form2 = FreeCADGui.PySideUic.loadUi(os.path.dirname(__file__) + "/PVPlantCreateTerrainMesh.ui")
+        #self.form2.buttonAdd.clicked.connect(self.add)
+        self.form2.buttonBoundary.clicked.connect(self.addBoundary)
+
+
+        self.form = [self.form1, self.form2]
 
     ''' future:
     def retranslateUi(self, dialog):
@@ -428,6 +438,12 @@ class _ImportPointsTaskPanel:
             self.obj = sel[0]
             self.lineEdit1.setText(self.obj.Label)
 
+    def addBoundary(self):
+        sel = FreeCADGui.Selection.getSelection()
+        if len(sel) > 0:
+            self.Boundary = sel[0]
+            self.form2.editBoundary.setText(self.Boundary.Label)
+
     def openFileDEM(self):
         filters = "Esri ASC (*.asc);;CSV (*.csv);;All files (*.*)"
         filename = QtGui.QFileDialog.getOpenFileName(None,
@@ -446,6 +462,9 @@ class _ImportPointsTaskPanel:
             self.form1.gbLocalFile.setVisible(True)
 
     def accept(self):
+        from datetime import datetime
+        starttime = datetime.now()
+
         try:
             PointGroups = FreeCAD.ActiveDocument.Point_Groups
         except:
@@ -466,107 +485,182 @@ class _ImportPointsTaskPanel:
             PointObject.addPoints(pts)
             PointGroup.Points = PointObject
 
-        elif self.select == 1: # DEM.
-            import numpy as np
+        else:
+            if self.filename == "":
+                return
 
-            root, extension = os.path.splitext(self.filename)
-
-            if extension.lower() == ".asc":
-                grid_space = 1
-
-                file = open(self.filename, "r")
-                templist = [line.split() for line in file.readlines()]
-                file.close()
-                del file
-
-                # Read meta data:
-                meta = templist[0:6]
-                nx = int(meta[0][1])                        # NCOLS
-                ny = int(meta[1][1])                        # NROWS
-                xllcorner = round(float(meta[2][1]), 3)     # XLLCENTER
-                yllcorner = round(float(meta[3][1]), 3)     # YLLCENTER
-                cellsize = round(float(meta[4][1]), 3)      # CELLSIZE
-                nodata_value = float(meta[5][1])            # NODATA_VALUE
-
-                # set coarse_factor
-                coarse_factor = max(round(grid_space / cellsize), 1)
-
-                # Get z values
-                templist = templist[6:(6 + ny)]
-                templist = [templist[i][0::coarse_factor] for i in np.arange(0, len(templist), coarse_factor)]
-                datavals = np.array(templist).astype(float)
-                templist.clear()
-
-                # create xy coordinates
-                x = cellsize * np.arange(nx)[0::coarse_factor] + xllcorner
-                y = cellsize * np.arange(ny)[-1::-1][0::coarse_factor] + yllcorner
-                x, y = np.meshgrid(x, y)
-
-                xx = x.flatten()
-                yy = y.flatten()
-                zz = datavals.flatten()
-
-                x[:] = 0
-                y[:] = 0
-                datavals[:] = 0
-
-                pts = []
-                for i in range(0, len(xx)):
-                    pts.append(FreeCAD.Vector(xx[i] * 1000, yy[i] * 1000, zz[i] * 1000))
-
-                xx[:] = 0
-                yy[:] = 0
-                zz[:] = 0
-
-                PointObject.addPoints(pts)
-                PointGroup.Points = PointObject
-                pts.clear()
-
-            elif extension.lower() == ".csv" or extension.lower() == ".txt":  # x, y, z from gps
-                import csv
+            if self.select == 1: # DEM.
                 import numpy as np
-                import matplotlib.mlab as ml
+                root, extension = os.path.splitext(self.filename)
 
-                import scipy as sp
-                import scipy.interpolate
+                if extension.lower() == ".asc":
+                    grid_space = 1
 
-                x=[]
-                y=[]
-                z=[]
-                delim = ';' if extension.lower() == "csv" else ' '
-                with open(self.filename, newline='') as csvfile:
-                    spamreader = csv.reader(csvfile, delimiter = delim)
-                    for row in spamreader:
-                        x.append(float(row[1]))
-                        y.append(float(row[2]))
-                        z.append(float(row[3]))
+                    file = open(self.filename, "r")
+                    templist = [line.split() for line in file.readlines()]
+                    file.close()
+                    del file
 
-                x = np.array(x)
-                y = np.array(y)
-                z = np.array(z)
-                spline = sp.interpolate.Rbf(x, y, z, function='thin-plate')
+                    # Read meta data:
+                    meta = templist[0:6]
+                    nx = int(meta[0][1])                        # NCOLS
+                    ny = int(meta[1][1])                        # NROWS
+                    xllcorner = round(float(meta[2][1]), 3)     # XLLCENTER
+                    yllcorner = round(float(meta[3][1]), 3)     # YLLCENTER
+                    cellsize = round(float(meta[4][1]), 3)      # CELLSIZE
+                    nodata_value = float(meta[5][1])            # NODATA_VALUE
 
-                xi = np.linspace(min(x), max(x))
-                yi = np.linspace(min(y), max(y))
-                X, Y = np.meshgrid(xi, yi)
-                Z = spline(X, Y)
+                    # set coarse_factor
+                    coarse_factor = max(round(grid_space / cellsize), 1)
 
-                xx = X.flatten()
-                yy = Y.flatten()
-                zz = Z.flatten()
+                    # Get z values
+                    templist = templist[6:(6 + ny)]
+                    templist = [templist[i][0::coarse_factor] for i in np.arange(0, len(templist), coarse_factor)]
+                    datavals = np.array(templist).astype(float)
+                    templist.clear()
 
-                i = 0
-                pts = []
-                for point in xx:
-                    pts.append(FreeCAD.Vector(xx[i] * 1000, yy[i] * 1000, zz[i] * 1000))
-                    i += 1
+                    # create xy coordinates
+                    x = cellsize * np.arange(nx)[0::coarse_factor] + xllcorner
+                    y = cellsize * np.arange(ny)[-1::-1][0::coarse_factor] + yllcorner
 
-                PointObject.addPoints(pts)
-                PointGroup.Points = PointObject
+                    site = PVPlantSite.get()
+                    if self.Boundary:
+                        inc_x = self.Boundary.Shape.BoundBox.XLength * 0.05
+                        inc_y = self.Boundary.Shape.BoundBox.YLength * 0.05
 
+                        min_x = 0
+                        max_x = 0
+
+                        comp = (self.Boundary.Shape.BoundBox.XMin - inc_x) / 1000
+                        for i in range(nx):
+                            if x[i] > comp:
+                                min_x = i - 1
+                                break
+                        comp = (self.Boundary.Shape.BoundBox.XMax + inc_x) / 1000
+                        for i in range(min_x, nx):
+                            if x[i] > comp:
+                                max_x = i
+                                break
+
+                        min_y = 0
+                        max_y = 0
+
+                        comp = (self.Boundary.Shape.BoundBox.YMax + inc_y) / 1000
+                        for i in range(ny):
+                            if y[i] < comp:
+                                max_y = i
+                                break
+                        comp = (self.Boundary.Shape.BoundBox.YMin - inc_y) / 1000
+                        for i in range(max_y, ny):
+                            if y[i] < comp:
+                                min_y = i
+                                break
+
+                        x = x[min_x:max_x]
+                        y = y[max_y:min_y]
+                        datavals = datavals[max_y:min_y, min_x:max_x]
+
+                    pts = []
+                    if True: # faster but more memory 46s - 4,25 gb
+                        x, y = np.meshgrid(x, y)
+                        xx = x.flatten()
+                        yy = y.flatten()
+                        zz = datavals.flatten()
+                        x[:] = 0
+                        y[:] = 0
+                        datavals[:] = 0
+
+                        pts = []
+                        for i in range(0, len(xx)):
+                            pts.append(FreeCAD.Vector(xx[i], yy[i], zz[i]) * 1000)
+
+                        xx[:] = 0
+                        yy[:] = 0
+                        zz[:] = 0
+
+                    else:   # 51s 3,2 gb
+                        createmesh = True
+                        if createmesh:
+                            import Part, Draft, DraftGeomUtils
+
+                            lines=[]
+                            for j in range(len(y)):
+                                edges = []
+                                for i in range(0, len(x) - 1):
+                                    ed = Part.makeLine(FreeCAD.Vector(x[i], y[j], datavals[j][i]) * 1000,
+                                                       FreeCAD.Vector(x[i + 1], y[j], datavals[j][i + 1]) * 1000)
+                                    edges.append(ed)
+
+                                #bspline = Draft.makeBSpline(pts)
+                                #bspline.ViewObject.hide()
+                                line = Part.Wire(edges)
+                                lines.append(line)
+
+                            '''
+                            for i in range(0, len(bsplines), 100):
+                                p = Part.makeLoft(bsplines[i:i + 100], False, False, False)
+                                Part.show(p)
+                            '''
+                            p = Part.makeLoft(lines, False, True, False)
+                            p = Part.Solid(p)
+                            Part.show(p)
+
+                        else:
+                            pts = []
+                            for j in range(ny):
+                                for i in range(nx):
+                                    pts.append(FreeCAD.Vector(x[i], y[j], datavals[j][i]) * 1000)
+
+
+                    PointObject.addPoints(pts)
+                    PointGroup.Points = PointObject
+                    pts.clear()
+
+                elif extension.lower() == ".csv" or extension.lower() == ".txt":  # x, y, z from gps
+                    import csv
+                    import numpy as np
+                    import matplotlib.mlab as ml
+
+                    import scipy as sp
+                    import scipy.interpolate
+
+                    x=[]
+                    y=[]
+                    z=[]
+                    delim = ';' if extension.lower() == "csv" else ' '
+                    with open(self.filename, newline='') as csvfile:
+                        spamreader = csv.reader(csvfile, delimiter = delim)
+                        for row in spamreader:
+                            x.append(float(row[1]))
+                            y.append(float(row[2]))
+                            z.append(float(row[3]))
+
+                    x = np.array(x)
+                    y = np.array(y)
+                    z = np.array(z)
+                    spline = sp.interpolate.Rbf(x, y, z, function='thin-plate')
+
+                    xi = np.linspace(min(x), max(x))
+                    yi = np.linspace(min(y), max(y))
+                    X, Y = np.meshgrid(xi, yi)
+                    Z = spline(X, Y)
+
+                    xx = X.flatten()
+                    yy = Y.flatten()
+                    zz = Z.flatten()
+
+                    i = 0
+                    pts = []
+                    for point in xx:
+                        pts.append(FreeCAD.Vector(xx[i] * 1000, yy[i] * 1000, zz[i] * 1000))
+                        i += 1
+
+                    PointObject.addPoints(pts)
+                    PointGroup.Points = PointObject
 
         FreeCAD.ActiveDocument.recompute()
         FreeCADGui.Control.closeDialog()
+        print("tiempo: ", datetime.now() - starttime)
 
     def reject(self):
         FreeCADGui.Control.closeDialog()
