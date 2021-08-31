@@ -80,8 +80,11 @@ class MapWindow(QtGui.QWidget):
         self.valueSearch = QtGui.QLineEdit(self)
         self.valueSearch.setPlaceholderText("Search")
         self.valueSearch.returnPressed.connect(self.GeoCoder)
+
         searchbutton = QtGui.QPushButton('Search')
         searchbutton.setFixedWidth(80)
+        searchbutton.clicked.connect(self.onSearch)
+
         SearchBarLayout = QtGui.QHBoxLayout(self)
         SearchBarLayout.addWidget(self.valueSearch)
         SearchBarLayout.addWidget(searchbutton)
@@ -149,19 +152,30 @@ class MapWindow(QtGui.QWidget):
         RightLayout.addItem(verticalSpacer)
 
         self.bAccept = QtGui.QPushButton('Accept')
+        self.bAccept.clicked.connect(self.onAcceptClick)
         RightLayout.addWidget(self.bAccept)
 
         # signals/slots
         QtCore.QObject.connect(self.kmlButton, QtCore.SIGNAL("clicked()"), self.importKML)
-        QtCore.QObject.connect(self.bAccept, QtCore.SIGNAL("clicked()"), self.OnAcceptClick)
 
-    def OnAcceptClick(self):
+
+    def onSearch(self):
         frame = self.view.page()
         frame.runJavaScript(
             "MyApp.georeference(drawnItems.getBounds().getCenter().lat, drawnItems.getBounds().getCenter().lng);" \
             "var data = drawnItems.toGeoJSON();" \
             "var convertedData = JSON.stringify(data);" \
-            "MyApp.shapes(convertedData);")
+            "MyApp.shapes(convertedData);"
+        )
+
+    def onAcceptClick(self):
+        frame = self.view.page()
+        frame.runJavaScript(
+            "MyApp.georeference(drawnItems.getBounds().getCenter().lat, drawnItems.getBounds().getCenter().lng);" \
+            "var data = drawnItems.toGeoJSON();" \
+            "var convertedData = JSON.stringify(data);" \
+            "MyApp.shapes(convertedData);"
+        )
         self.close()
 
     def onLoadFinished(self):

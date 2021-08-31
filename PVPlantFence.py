@@ -370,9 +370,6 @@ class _Fence(ArchComponent.Component):
     def execute(self, obj):
         import Part
 
-        self.Posts = []
-        self.Foundations = []
-        land = PVPlantSite.get().Terrain
         pathwire = self.calculatePathWire(obj)
         if not pathwire:
             # FreeCAD.Console.PrintLog("ArchFence.execute: path " + obj.Base.Name + " has no edges\n")
@@ -386,10 +383,17 @@ class _Fence(ArchComponent.Component):
             FreeCAD.Console.PrintLog("ArchFence.execute: Post not set\n")
             return
 
-        proj = land.Shape.makeParallelProjection(pathwire, FreeCAD.Vector(0, 0, 1))
-        Part.show(proj)
+        self.Posts = []
+        self.Foundations = []
+        site = PVPlantSite.get()
+        land = site.Terrain.Shape
+
+        land_coppy = land.copy()
+        land_coppy.Placement.Base -= site.Origin
+        pathwire = pathwire.copy()
+        pathwire.Placement.Base -= site.Origin
+        proj = land_coppy.makeParallelProjection(pathwire, FreeCAD.Vector(0, 0, 1))
         pathwire = Part.Wire(proj.Edges)
-        Part.show(pathwire)
 
         pathLength = pathwire.Length
         sectionLength = obj.Gap.Value
@@ -434,6 +438,7 @@ class _Fence(ArchComponent.Component):
 
         compound = Part.makeCompound(allShapes)
         obj.Shape = compound
+        obj.Placement.Base += site.Origin
 
     def calculateSegments(self, obj, pathwire):
         import math
@@ -538,7 +543,6 @@ class _Fence(ArchComponent.Component):
                 wire = obj.Base.Shape.Wires[0]
             elif obj.Base.Shape.Edges:
                 wire = Part.Wire(obj.Base.Shape.Edges)
-
             return wire
         return None
 

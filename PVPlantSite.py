@@ -746,7 +746,7 @@ class _PVPlantSite(ArchSite._Site):
         x, y, zone_number, zone_letter = utm.from_latlon(lat, lon)
         self.obj.UtmZone = zone_list[zone_number - 1]
         # self.obj.UtmZone = "Z"+str(zone_number)
-        self.obj.Origin = (x, y, 0.0)
+        self.obj.Origin = FreeCAD.Vector(x, y, 0.0) * 1000
 
 
 class _ViewProviderSite(ArchSite._ViewProviderSite):
