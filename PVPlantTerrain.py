@@ -158,30 +158,36 @@ class _Terrain(ArchComponent.Component):
         'Sketcher::PropertyConstraintList'
         ]'''
 
-        obj.addProperty("App::PropertyLink",
-                        "CuttingBoundary",
-                        "Surface",
-                        "A boundary line to delimit the surface")
 
-        obj.addProperty("App::PropertyFile",
-                        "DEM",
-                        "Surface",
-                        "Load a ASC file to generate the surface")
+        pl = obj.PropertiesList
+        if not "CuttingBoundary" in pl:
+            obj.addProperty("App::PropertyLink",
+                            "CuttingBoundary",
+                            "Surface",
+                            "A boundary line to delimit the surface")
+        if not "DEM" in pl:
+            obj.addProperty("App::PropertyFile",
+                            "DEM",
+                            "Surface",
+                            "Load a ASC file to generate the surface")
+        if not "PointsGroup" in pl:
+            obj.addProperty("App::PropertyLink",
+                            "PointsGroup",
+                            "Surface",
+                            "Use a Point Group to generate the surface")
 
-        obj.addProperty("App::PropertyLink",
-                        "PointsGroup",
-                        "Surface",
-                        "Use a Point Group to generate the surface")
-
-        obj.addProperty("App::PropertyLinkList",
-                        "AllowedAreas",
-                        "Areas",
-                        "A boundary to delimitated the terrain").AllowedAreas = []
-
-        obj.addProperty("App::PropertyLinkList",
-                        "ProhibitedAreas",
-                        "Areas",
-                        "A boundary to delimitated the terrain").ProhibitedAreas = []
+        '''
+        if not "AllowedAreas" in pl:
+            obj.addProperty("App::PropertyLinkList",
+                            "AllowedAreas",
+                            "Areas",
+                            "A boundary to delimitated the terrain").AllowedAreas = []
+        if not "ProhibitedAreas" in pl:
+            obj.addProperty("App::PropertyLinkList",
+                            "ProhibitedAreas",
+                            "Areas",
+                            "A boundary to delimitated the terrain").ProhibitedAreas = []
+        '''
 
     def __getstate__(self):
         return self.Type
@@ -345,6 +351,7 @@ class _ViewProviderTerrain(ArchComponent.ViewProviderComponent):
         '''
         Create Object visuals in 3D view.
         '''
+        self.Object = vobj.Object
 
         # GeoCoords Node.
         self.geo_coords = coin.SoGeoCoordinate()

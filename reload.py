@@ -26,7 +26,7 @@ class _CommandReload:
     def Activated(self):
         import PVPlantPlacement, \
             PVPlantGeoreferencing, PVPlantImportGrid, PVPlantTerrainAnalisys, \
-            PVPlantSite, PVPlantRack, PVPlantFence, PVPlantCreateTerrainMesh, \
+            PVPlantSite, PVPlantRack, PVPlantFence, PVPlantFencePost, PVPlantCreateTerrainMesh, \
             PVPlantFoundation, PVPlantTreeGenerator, exportPVSyst, \
             PVPlantTrench, PVPEarthWorks, PVPlantBOQFrames, PVPlantStringBox, PVPlantCable, PVPlantPad, \
             PVPlantRoad, PVPlantTerrain
@@ -40,6 +40,7 @@ class _CommandReload:
         importlib.reload(PVPlantSite)
         importlib.reload(PVPlantRack)
         importlib.reload(PVPlantFence)
+        importlib.reload(PVPlantFencePost)
         importlib.reload(PVPlantFoundation)
         importlib.reload(PVPlantCreateTerrainMesh)
         importlib.reload(PVPlantTreeGenerator)

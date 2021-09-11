@@ -50,10 +50,13 @@ def spreadsheetBOQFrames(sel):
     sheet['B1'] = 'Nombre'
     sheet['C1'] = 'X'
     sheet['D1'] = 'Y'
-    sheet['E1'] = 'Z'
-    sheet['F1'] = 'Ángulo N-S'
-    sheet['G1'] = 'Ángulo E-O'
-    sheet['H1'] = 'Nº Hincas'
+    sheet['E1'] = 'Z frame attach'
+    sheet['F1'] = 'Z terrain enter'
+    sheet['G1'] = 'Z aerial head'
+    sheet['H1'] = 'Pole aerial length'
+    sheet['I1'] = 'Ángulo N-S'
+    sheet['J1'] = 'Ángulo E-O'
+    sheet['K1'] = 'Nº Hincas'
 
     #ws = wb.active
     #ws3.cell(column=col, row=row, value="{0}".format(get_column_letter(col)))

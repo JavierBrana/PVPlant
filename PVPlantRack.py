@@ -1,6 +1,8 @@
 import FreeCAD, Draft
 import ArchComponent
 import PVPlantSite
+import Part
+import math
 
 if FreeCAD.GuiUp:
     import FreeCADGui
@@ -8,10 +10,6 @@ if FreeCAD.GuiUp:
     from DraftTools import translate
     from PySide.QtCore import QT_TRANSLATE_NOOP
 
-    import Part
-    import pivy
-    from pivy import coin
-    import os
 else:
     # \cond
     def translate(ctxt, txt):
@@ -25,6 +23,7 @@ __title__ = "FreeCAD Fixed Rack"
 __author__ = "Javier Braña"
 __url__ = "http://www.sogos-solar.com"
 
+import os
 __dir__ = os.path.join(FreeCAD.getUserAppDataDir(), "Mod", "PVPlant")
 DirResources = os.path.join(__dir__, "Resources")
 DirIcons = os.path.join(DirResources, "Icons")
@@ -55,118 +54,126 @@ class _Frame(ArchComponent.Component):
         # Definicion de Propiedades:
         ArchComponent.Component.setProperties(self, obj)
 
+        pl = obj.PropertiesList
         # Modulo: ------------------------------------------------------------------------------------------------------
-        obj.addProperty("App::PropertyLength",
-                        "ModuleThick",
-                        "Module",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).ModuleThick = 40
-
-        obj.addProperty("App::PropertyLength",
-                        "ModuleWidth",
-                        "Module",
-                        QT_TRANSLATE_NOOP("App::Property", "The width of this object")
-                        ).ModuleWidth = 992
-
-        obj.addProperty("App::PropertyLength",
-                        "ModuleHeight",
-                        "Module",
-                        QT_TRANSLATE_NOOP("App::Property", "The Length of this object")
-                        ).ModuleHeight = 1996
-
-        obj.addProperty("App::PropertyQuantity",
-                        "ModulePower",
-                        "Module",
-                        QT_TRANSLATE_NOOP("App::Property", "The Length of this object")
-                        ).ModulePower = 400
+        if not "ModuleThick" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "ModuleThick",
+                            "Module",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleThick = 40
+        if not "ModuleWidth" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "ModuleWidth",
+                            "Module",
+                            QT_TRANSLATE_NOOP("App::Property", "The width of this object")
+                            ).ModuleWidth = 992
+        if not "ModuleHeight" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "ModuleHeight",
+                            "Module",
+                            QT_TRANSLATE_NOOP("App::Property", "The Length of this object")
+                            ).ModuleHeight = 1996
+        if not "ModulePower" in pl:
+            obj.addProperty("App::PropertyQuantity",
+                            "ModulePower",
+                            "Module",
+                            QT_TRANSLATE_NOOP("App::Property", "The Length of this object")
+                            ).ModulePower = 400
 
         # Array de modulos: -------------------------------------------------------------------------------------------
-        obj.addProperty("App::PropertyQuantity",
-                        "ModuleCols",
-                        "Posicion de modulos",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).ModuleCols = 15
-
-        obj.addProperty("App::PropertyQuantity",
-                        "ModuleRows",
-                        "Posicion de modulos",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).ModuleRows = 2
-
-        obj.addProperty("App::PropertyDistance",
-                        "ModuleColGap",
-                        "Posicion de modulos",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).ModuleColGap = 20
-
-        obj.addProperty("App::PropertyDistance",
-                        "ModuleRowGap",
-                        "Posicion de modulos",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).ModuleRowGap = 20
-
-        obj.addProperty("App::PropertyDistance",
-                       "ModuleOffsetX",
-                       "Posicion de modulos",
-                       QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                       ).ModuleOffsetX = 0
-
-        obj.addProperty("App::PropertyDistance",
-                       "ModuleOffsetY",
-                       "Posicion de modulos",
-                       QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                       ).ModuleOffsetY = 0
-
-        obj.addProperty("App::PropertyEnumeration",
-                        "ModuleOrientation",
-                        "Posicion de modulos",
-                        QT_TRANSLATE_NOOP("App::Property",
-                                          "The facemaker type to use to build the profile of this object")
-                        ).ModuleOrientation = ["Portrait", "Landscape"]
-
-        obj.addProperty("App::PropertyBool",
-                        "ModuleViews",
-                        "Posicion de modulos",
-                        QT_TRANSLATE_NOOP("App::Property",
-                                          "The facemaker type to use to build the profile of this object")
-                        ).ModuleViews = True
+        if not "ModuleCols" in pl:
+            bj.addProperty("App::PropertyQuantity",
+                            "ModuleCols",
+                            "Posicion de modulos",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleCols = 15
+        if not "ModuleRows" in pl:
+            obj.addProperty("App::PropertyQuantity",
+                            "ModuleRows",
+                            "Posicion de modulos",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleRows = 2
+        if not "ModuleColGap" in pl:
+            obj.addProperty("App::PropertyDistance",
+                            "ModuleColGap",
+                            "Posicion de modulos",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleColGap = 20
+        if not "MotorGap" in pl:
+            obj.addProperty("App::PropertyDistance",
+                            "ModuleRowGap",
+                            "Posicion de modulos",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleRowGap = 20
+        if not "ModuleOffsetX" in pl:
+            obj.addProperty("App::PropertyDistance",
+                           "ModuleOffsetX",
+                           "Posicion de modulos",
+                           QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                           ).ModuleOffsetX = 0
+        if not "ModuleOffsetY" in pl:
+            obj.addProperty("App::PropertyDistance",
+                           "ModuleOffsetY",
+                           "Posicion de modulos",
+                           QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                           ).ModuleOffsetY = 0
+        if not "ModuleOrientation" in pl:
+            obj.addProperty("App::PropertyEnumeration",
+                            "ModuleOrientation",
+                            "Posicion de modulos",
+                            QT_TRANSLATE_NOOP("App::Property",
+                                              "The facemaker type to use to build the profile of this object")
+                            ).ModuleOrientation = ["Portrait", "Landscape"]
+        if not "ModuleViews" in pl:
+            obj.addProperty("App::PropertyBool",
+                            "ModuleViews",
+                            "Posicion de modulos",
+                            QT_TRANSLATE_NOOP("App::Property",
+                                              "The facemaker type to use to build the profile of this object")
+                            ).ModuleViews = True
 
         # Frame --------------------------------------------------------------------------------------------------------
-        obj.addProperty("App::PropertyAngle",
-                        "Tilt",
-                        "Frame",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).Tilt = 30
+        if not "Tilt" in pl:
+            obj.addProperty("App::PropertyAngle",
+                            "Tilt",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).Tilt = 30
 
-        obj.addProperty("App::PropertyAngle",
-                        "MaxLengthwiseTilt",
-                        "Frame",
-                        QT_TRANSLATE_NOOP("App::Property", "Máxima inclinación longitudinal")
-                        ).MaxLengthwiseTilt = 15
+        if not "MaxLengthwiseTilt" in pl:
+            obj.addProperty("App::PropertyAngle",
+                            "MaxLengthwiseTilt",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property", "Máxima inclinación longitudinal")
+                            ).MaxLengthwiseTilt = 15
 
-        obj.addProperty("App::PropertyDistance",
-                        "Width",
-                        "Frame",
-                        QT_TRANSLATE_NOOP("App::Property",
-                                          "Largo de la estructura")
-                        )
-        obj.setEditorMode("Width", 1)
+        if not "Width" in pl:
+            obj.addProperty("App::PropertyDistance",
+                            "Width",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property",
+                                              "Largo de la estructura")
+                            )
+            obj.setEditorMode("Width", 1)
 
-        obj.addProperty("App::PropertyDistance",
-                        "Length",
-                        "Frame",
-                        QT_TRANSLATE_NOOP("App::Property",
-                                          "Ancho de la estructura")
-                        )
-        obj.setEditorMode("Length", 1)
+        if not "Length" in pl:
+            obj.addProperty("App::PropertyDistance",
+                            "Length",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property",
+                                              "Ancho de la estructura")
+                            )
+            obj.setEditorMode("Length", 1)
 
-        obj.addProperty("App::PropertyDistance",
-                        "TotalAreaShape",
-                        "Frame",
-                        QT_TRANSLATE_NOOP("Part::PropertyPartShape",
-                                          "Total Area de los Paneles")
-                        )
-        obj.setEditorMode("TotalAreaShape", 1)
+        if not "TotalAreaShape" in pl:
+            obj.addProperty("App::PropertyDistance",
+                            "TotalAreaShape",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("Part::PropertyPartShape",
+                                              "Total Area de los Paneles")
+                            )
+            obj.setEditorMode("TotalAreaShape", 1)
         self.Type = "Frame"
 
         '''[
@@ -274,70 +281,78 @@ class _FixedRack(_Frame):
         # obj.MoveWithHost = False
 
     def setProperties(self, obj):
-        # Definicion de Propiedades:
+
+        pl = obj.PropertiesList
 
         # Array of Posts: ------------------------------------------------------------------------------------------------------
-        obj.addProperty("App::PropertyQuantity",
-                        "NumberPostsX",
-                        "Poles",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).NumberPostsX = 5
+        if not "NumberPostsX" in pl:
+            obj.addProperty("App::PropertyQuantity",
+                            "NumberPostsX",
+                            "Poles",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).NumberPostsX = 5
 
-        obj.addProperty("App::PropertyLength",
-                        "DistancePostsX",
-                        "Poles",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).DistancePostsX = 3000
+        if not "DistancePostsX" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "DistancePostsX",
+                            "Poles",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).DistancePostsX = 3000
 
-        obj.addProperty("App::PropertyBool",
-                        "FrontPost",
-                        "Poles",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).FrontPost = False
+        if not "FrontPost" in pl:
+            obj.addProperty("App::PropertyBool",
+                            "FrontPost",
+                            "Poles",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).FrontPost = False
 
-        obj.addProperty("App::PropertyLength",
-                        "DistancePostsY",
-                        "Poles",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).DistancePostsY = 2000
+        if not "DistancePostsY" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "DistancePostsY",
+                            "Poles",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).DistancePostsY = 2000
 
-        obj.addProperty("App::PropertyLength",
-                        "RammingDeep",
-                        "Poles",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).RammingDeep = 1500
+        if not "RammingDeep" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "RammingDeep",
+                            "Poles",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).RammingDeep = 1500
         # Correas: ----------------------------------------------------------------------------------------------------
-        obj.addProperty("App::PropertyLength",
-                        "BeamHeight",
-                        "Beam",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).BeamHeight = 80
+        if not "BeamHeight" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "BeamHeight",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).BeamHeight = 80
 
-        obj.addProperty("App::PropertyLength",
-                        "BeamWidth",
-                        "Beam",
-                        QT_TRANSLATE_NOOP("App::Property", "The width of this object")
-                        ).BeamWidth = 50
+        if not "BeamWidth" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "BeamWidth",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The width of this object")
+                            ).BeamWidth = 50
 
-        obj.addProperty("App::PropertyLength",
-                        "BeamOffset",
-                        "Beam",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).BeamOffset = 50
+        if not "BeamOffset" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "BeamOffset",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).BeamOffset = 50
 
-        obj.addProperty("App::PropertyLength",
-                        "BeamSpacing",
-                        "Beam",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).BeamSpacing = 1000
-
+        if not "BeamSpacing" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "BeamSpacing",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).BeamSpacing = 1000
 
         self.Type = "Fixed Rack"
 
     def onDocumentRestored(self, obj):
         ArchComponent.Component.onDocumentRestored(self, obj)
-        # self.setProperties(obj)
-        self.Type = "Fixed Rack"
+        self.setProperties(obj)
 
     def __getstate__(self):
         return self.Type
@@ -401,16 +416,6 @@ class _FixedRack(_Frame):
 
         correaoffsety = (moduleh - obj.BeamSpacing.Value - obj.BeamWidth.Value) / 2
         for y in range(int(obj.ModuleRows.Value)):
-            # Correas
-            '''
-            for i in range(2):
-                correaCopy = correa.copy()
-                correaCopy.Placement.Base.x = totalArea.Placement.Base.x - obj.BeamWidth.Value
-                correaCopy.Placement.Base.y = totalArea.Placement.Base.y + correaoffsety + (obj.BeamSpacing.Value * i) + (
-                            moduleh + obj.ModuleRowGap.Value) * y
-                self.ListModules.append(correaCopy)
-            '''
-            # Módulos
             for x in range(int(obj.ModuleCols.Value)):
                 xx = totalArea.Placement.Base.x + (modulew + obj.ModuleColGap.Value) * x
                 yy = totalArea.Placement.Base.y + (moduleh + obj.ModuleRowGap.Value) * y
@@ -451,7 +456,7 @@ class _FixedRack(_Frame):
         # DistancePostsY
         '''
 
-        import Part, math
+
         postBack = Part.makeBox(obj.BackPostWidth.Value, obj.BackPostHeight.Value, obj.BackPostLength.Value)
         postFront = Part.makeBox(obj.FrontPostWidth.Value, obj.FrontPostHeight.Value, obj.FrontPostLength.Value)
 
@@ -634,7 +639,9 @@ def makeTracker(name="Tracker"):
     FreeCAD.ActiveDocument.recompute()
 
     site = PVPlantSite.get()
-    site.Frames.append(obj)
+    frame_list = site.Frames
+    frame_list.append(obj)
+    site.Frames = frame_list
 
     return obj
 
@@ -646,8 +653,6 @@ class _Tracker(_Frame):
         # Definición de Variables:
         _Frame.__init__(self, obj)
         self.setProperties(obj)
-        self.Type = "1 Axis Tracker"
-        self.obj = obj
         obj.Proxy = self
 
         obj.ModuleCols = 45
@@ -661,115 +666,121 @@ class _Tracker(_Frame):
         # obj.MoveWithHost = False
 
     def setProperties(self, obj):
-        # Definicion de Propiedades:
+        pl = obj.PropertiesList
+
         # Array de modulos: -------------------------------------------------------------------------------------------
-        obj.addProperty("App::PropertyDistance",
-                    "MotorGap",
-                    "Posicion de modulos",
-                    QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                    ).MotorGap = 550
+        if not "MotorGap" in pl:
+            obj.addProperty("App::PropertyDistance",
+                        "MotorGap",
+                        "Posicion de modulos",
+                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                        ).MotorGap = 550
 
         # Poles: ------------------------------------------------------------------------------------------------------
-        obj.addProperty("App::PropertyLength",
-                        "PoleHeight",
-                        "Pole",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).PoleHeight = 160
-
-        obj.addProperty("App::PropertyLength",
-                        "PoleWidth",
-                        "Pole",
-                        QT_TRANSLATE_NOOP("App::Property", "The width of this object")
-                        ).PoleWidth = 80
-
-        obj.addProperty("App::PropertyLength",
-                        "PoleLength",
-                        "Pole",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).PoleLength = 3000
+        if not "PoleHeight" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "PoleHeight",
+                            "Pole",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).PoleHeight = 160
+        if not "PoleWidth" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "PoleWidth",
+                            "Pole",
+                            QT_TRANSLATE_NOOP("App::Property", "The width of this object")
+                            ).PoleWidth = 80
+        if not "PoleLength" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "PoleLength",
+                            "Pole",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).PoleLength = 3000
 
         # Array of Posts: ------------------------------------------------------------------------------------------------------
-        obj.addProperty("App::PropertyQuantity",
-                        "NumberPole",
-                        "Poles",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).NumberPole = 7
-
-        obj.addProperty("App::PropertyFloatList",
-                        "DistancePole",
-                        "Poles",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).DistancePole = [1500.0, 3000.0, 7000.0, 7000.0, 7000.0, 7000.0, 7000.0]
-
-        obj.addProperty("App::PropertyLength",
-                        "AerialPole",
-                        "Poles",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).AerialPole = 1050
+        if not "NumberPole" in pl:
+            obj.addProperty("App::PropertyQuantity",
+                            "NumberPole",
+                            "Poles",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).NumberPole = 7
+        if not "DistancePole" in pl:
+            obj.addProperty("App::PropertyFloatList",
+                            "DistancePole",
+                            "Poles",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).DistancePole = [1500.0, 3000.0, 7000.0, 7000.0, 7000.0, 7000.0, 7000.0]
+        if not "AerialPole" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "AerialPole",
+                            "Poles",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).AerialPole = 1050
 
         # Correas: ----------------------------------------------------------------------------------------------------
-        obj.addProperty("App::PropertyLength",
-                        "MainBeamHeight",
-                        "Beam",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).MainBeamHeight = 120
-
-        obj.addProperty("App::PropertyLength",
-                        "MainBeamWidth",
-                        "Beam",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).MainBeamWidth = 120
-
-        obj.addProperty("App::PropertyLength",
-                        "MainBeamAxisPosition",
-                        "Beam",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).MainBeamAxisPosition = 1278
-
-        obj.addProperty("App::PropertyLength",
-                        "BeamHeight",
-                        "Beam",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).BeamHeight = 80
-
-        obj.addProperty("App::PropertyLength",
-                        "BeamWidth",
-                        "Beam",
-                        QT_TRANSLATE_NOOP("App::Property", "The width of this object")
-                        ).BeamWidth = 50
-
-        obj.addProperty("App::PropertyLength",
-                        "BeamOffset",
-                        "Beam",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).BeamOffset = 50
-
-        obj.addProperty("App::PropertyLength",
-                        "BeamSpacing",
-                        "Beam",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).BeamSpacing = 1000
+        if not "MainBeamHeight" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "MainBeamHeight",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MainBeamHeight = 120
+        if not "MainBeamWidth" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "MainBeamWidth",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MainBeamWidth = 120
+        if not "MainBeamAxisPosition" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "MainBeamAxisPosition",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MainBeamAxisPosition = 1278
+        if not "BeamHeight" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "BeamHeight",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).BeamHeight = 80
+        if not "BeamOffset" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "BeamWidth",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The width of this object")
+                            ).BeamWidth = 50
+        if not "Tool" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "BeamOffset",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).BeamOffset = 50
+        if not "BeamSpacing" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "BeamSpacing",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).BeamSpacing = 1000
 
         # Tracker --------------------------------------------------------------------------------------------------------
-        obj.addProperty("App::PropertyAngle",
-                        "MaxPhi",
-                        "Frame",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).MaxPhi = 60
+        if not "MaxPhi" in pl:
+            obj.addProperty("App::PropertyAngle",
+                            "MaxPhi",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MaxPhi = 60
+        if not "MinPhi" in pl:
+            obj.addProperty("App::PropertyAngle",
+                            "MinPhi",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MinPhi = -60
 
-        obj.addProperty("App::PropertyAngle",
-                        "MinPhi",
-                        "Frame",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).MinPhi = -60
+        self.Type = "1 Axis Tracker"
 
     def onDocumentRestored(self, obj):
         """Method run when the document is restored.
         Re-adds the Arch component, and Arch wall properties."""
 
         ArchComponent.Component.onDocumentRestored(self, obj)
-        self.obj = obj
-        self.Type = "1 Axis Tracker"
         obj.Proxy = self
 
     def onChanged(self, fp, prop):
@@ -799,11 +810,33 @@ class _Tracker(_Frame):
 
     def CalculateModuleArray(self, obj, totalh, totalw, moduleh, modulew):
 
-        import Part, Draft
-
         module = Part.makeBox(modulew, moduleh, obj.ModuleThick.Value)
         compound = Part.makeCompound([])
         offsetz = obj.MainBeamHeight.Value + obj.BeamHeight.Value
+
+        # Correa profile:
+        width = 83.2
+        heigth = 80
+        up = 27.8
+        thi = 3.2
+
+        p1 = FreeCAD.Vector(width / 2 - up, 0, thi)
+        p2 = FreeCAD.Vector(p1.x, 0, heigth)
+        p3 = FreeCAD.Vector(width / 2, 0, p2.z)
+        p4 = FreeCAD.Vector(p3.x, 0, heigth - thi)
+        p5 = FreeCAD.Vector(p4.x - up + thi, 0, p4.z)
+        p6 = FreeCAD.Vector(p5.x, 0, 0)
+
+        p7 = FreeCAD.Vector(-p6.x, 0, p6.z)
+        p8 = FreeCAD.Vector(-p5.x, 0, p5.z)
+        p9 = FreeCAD.Vector(-p4.x, 0, p4.z)
+        p10 = FreeCAD.Vector(-p3.x, 0, p3.z)
+        p11 = FreeCAD.Vector(-p2.x, 0, p2.z)
+        p12 = FreeCAD.Vector(-p1.x, 0, p1.z)
+
+        p = Part.makePolygon([p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p1])
+        p = Part.Face(p)
+        correa = p.extrude(FreeCAD.Vector(0, 428, 0))
 
         # if ShowtotalArea:
         '''
@@ -830,7 +863,7 @@ class _Tracker(_Frame):
         p3 = FreeCAD.Vector(totalw, totalh, 0)
         p4 = FreeCAD.Vector(0, totalh, 0)
         polygon = Part.makePolygon([p1, p2, p3, p4, p1])
-        totalArea = Part.makeFilledFace(polygon.Edges)
+        totalArea = Part.Face(polygon)
         totalArea.Placement.Base.x = -totalw / 2
         totalArea.Placement.Base.y = -totalh / 2
         totalArea.Placement.Base.z = offsetz
@@ -860,19 +893,10 @@ class _Tracker(_Frame):
         mainbeam.Placement.Base.y = -obj.MainBeamWidth.Value / 2
         compound.add(mainbeam)
 
+        mid = int(obj.ModuleCols.Value / 2)
         if obj.ModuleViews:
-            correaoffsety = (moduleh - obj.BeamSpacing.Value - obj.BeamWidth.Value) / 2
-            mid = int(obj.ModuleCols.Value / 2)
+
             for row in range(int(obj.ModuleRows.Value)):
-                # Correas
-                '''
-                for i in range(2):
-                    correaCopy = correa.copy()
-                    correaCopy.Placement.Base.x = totalArea.Placement.Base.x - obj.BeamWidth.Value
-                    correaCopy.Placement.Base.y = totalArea.Placement.Base.y + correaoffsety + (obj.BeamSpacing.Value * i) + (
-                                moduleh + obj.ModuleRowGap.Value) * y
-                    self.ListModules.append(correaCopy)
-                '''
                 # Módulos
                 for col in range(int(obj.ModuleCols.Value)):
                     xx = totalArea.Placement.Base.x + (modulew + obj.ModuleColGap.Value) * col
@@ -886,6 +910,25 @@ class _Tracker(_Frame):
                     moduleCopy.Placement.Base.z = zz
                     self.ListModules.append(moduleCopy)
                     compound.add(moduleCopy)
+
+        # Correas
+        for col in range(int(obj.ModuleCols.Value)):
+            xx = totalArea.Placement.Base.x + (modulew + obj.ModuleColGap.Value) * col
+            if col >= mid:
+                xx += float(obj.MotorGap.Value) - obj.ModuleColGap.Value
+            yy = totalArea.Placement.Base.y + (moduleh + obj.ModuleRowGap.Value)
+            zz = offsetz
+            moduleCopy = module.copy()
+            moduleCopy.Placement.Base.x = xx + obj.ModuleColGap.Value / 2
+            moduleCopy.Placement.Base.y = yy
+            moduleCopy.Placement.Base.z = zz
+
+            correaCopy = correa.copy()
+            correaCopy.Placement.Base.x = xx
+            correaCopy.Placement.Base.y = -428 / 2
+            correaCopy.Placement.Base.z = obj.MainBeamHeight.Value
+            self.ListModules.append(correaCopy)
+            compound.add(correaCopy)
 
         compound.Placement.Base.z = obj.MainBeamAxisPosition.Value - (obj.MainBeamHeight.Value / 2)
         base = FreeCAD.Vector(0, 0, obj.MainBeamAxisPosition.Value)

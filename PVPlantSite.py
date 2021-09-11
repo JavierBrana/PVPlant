@@ -121,23 +121,42 @@ def projectWireOnMesh(Boundary, Mesh):
         FreeCAD.ActiveDocument.recompute()
 
 
-def makePVPlantSite(objectslist=None, baseobj=None, name="Site"):
-    '''makeBuilding(objectslist): creates a site including the
-    objects from the given list.'''
-    import Part
+def makePVPlantSite(name="Site"):
+
+    def createGroup(father, groupname, type = None):
+        group = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup", groupname)
+        group.Label = groupname
+        ObjGroups = father.Group
+        ObjGroups.append(group)
+        father.Group = ObjGroups
+        return group
+
     obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Site")
-    obj.Label = translate("Arch", name)
+    obj.Label = name
     _PVPlantSite(obj)
     if FreeCAD.GuiUp:
         _ViewProviderSite(obj.ViewObject)
-    if objectslist:
-        obj.Group = objectslist
-    if baseobj:
-        import Part
-        if isinstance(baseobj, Part.Shape):
-            obj.Shape = baseobj
-        else:
-            obj.Terrain = baseobj
+
+    group = createGroup(obj, "CivilGroup")
+    createGroup(group, "Areas")
+    createGroup(group, "Drain")
+    createGroup(group, "Earthworks")
+    createGroup(group, "Fence")
+    createGroup(group, "Foundations")
+    createGroup(group, "Pads")
+    createGroup(group, "Roads")
+
+    group = createGroup(obj, "ElectricalGroup")
+    group1 = createGroup(group, "AC")
+    createGroup(group1, "Cable")
+    group1 = createGroup(group, "DC")
+    createGroup(group1, "Cable")
+    createGroup(group1, "Strings")
+    createGroup(group1, "StringsBoxes")
+
+    group = createGroup(obj, "MechanicalGroup")
+    createGroup(group, "Frames")
+
     return obj
 
 

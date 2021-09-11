@@ -1,7 +1,4 @@
 import FreeCAD
-import ArchComponent
-import Draft
-import numba
 
 if FreeCAD.GuiUp:
     import FreeCADGui, os
@@ -198,6 +195,8 @@ class Graph():
         self.edges[to_node].append(from_node)
         self.weights[(from_node, to_node)] = weight
         self.weights[(to_node, from_node)] = weight
+
+
 
 def dijsktra(graph, initial, end):
     # shortest paths is a dict of nodes
