@@ -308,23 +308,24 @@ class _PVPlantPlacementTaskPanel:
             self.Rack = selection[0]
             self.form.editFrame.setText(self.Rack.Label)
 
-    def calculateGrid(self):
+    def calculateAlignedArray(self):
         from datetime import datetime
         starttime = datetime.now()
 
         gap_col = FreeCAD.Units.Quantity(self.form.editGapCols.text()).Value
         gap_row = FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value + max(self.Rack.Shape.BoundBox.XLength, self.Rack.Shape.BoundBox.YLength)
         offset_x = FreeCAD.Units.Quantity(self.form.editOffsetHorizontal.text()).Value
+        offset_y = FreeCAD.Units.Quantity(self.form.editOffsetVertical.text()).Value
         Terrain = getTerrain().Shape
         Area = self.PVArea.Shape
 
         rec = Part.makePlane(self.Rack.Shape.BoundBox.YLength, self.Rack.Shape.BoundBox.XLength)
 
-
         # TODO: revisar todo esto: -----------------------------------------------------------------
         sel = FreeCADGui.Selection.getSelectionEx()[0]
         refh = None
         refv = None
+
         if len(sel.SubObjects) == 0:
             return 0
 
@@ -364,6 +365,112 @@ class _PVPlantPlacementTaskPanel:
                         pl.append(cp.BoundBox.Center)
                         Part.show(cp)
 
+
+        for point in pl:
+            newrack = FreeCAD.ActiveDocument.copyObject(self.Rack)
+            newrack.Label = "Tracker"
+            newrack.Placement.rotate(newrack.Shape.BoundBox.Center, FreeCAD.Vector(0, 0, 1), -90)
+            newrack.Placement.Base = point
+            newrack.Visibility = True
+
+        #TODO: ajustar los tracker al terreno
+
+        total_time = datetime.now() - starttime
+        print(" -- Tiempo tardado:", total_time)
+        print("    --  Trackers creados: ", len(pl), ", tiempo por tracker: ", total_time / len(pl))
+
+    def calculateNonAlignedArray(self):
+        from datetime import datetime
+        starttime = datetime.now()
+
+        gap_col = FreeCAD.Units.Quantity(self.form.editGapCols.text()).Value
+        gap_row = FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value + max(self.Rack.Shape.BoundBox.XLength,
+                                                                                   self.Rack.Shape.BoundBox.YLength)
+        offset_x = FreeCAD.Units.Quantity(self.form.editOffsetHorizontal.text()).Value
+        offset_y = FreeCAD.Units.Quantity(self.form.editOffsetVertical.text()).Value
+        Terrain = getTerrain().Shape
+        Area = self.PVArea.Shape
+
+        rec = Part.makePlane(self.Rack.Shape.BoundBox.YLength, self.Rack.Shape.BoundBox.XLength)
+
+        # TODO: revisar todo esto: -----------------------------------------------------------------
+        sel = FreeCADGui.Selection.getSelectionEx()[0]
+        refh = None
+        refv = None
+
+        if len(sel.SubObjects) == 0:
+            return 0
+
+        if len(sel.SubObjects) == 1:
+            refh = refv = sel.SubObjects[0]
+
+        if len(sel.SubObjects) == 2:
+            if sel.SubObjects[0].BoundBox.XLength > sel.SubObjects[1].BoundBox.XLength:
+                refh = sel.SubObjects[0]
+            else:
+                refh = sel.SubObjects[1]
+
+            if sel.SubObjects[0].BoundBox.YLength > sel.SubObjects[1].BoundBox.YLength:
+                refv = sel.SubObjects[0]
+            else:
+                refv = sel.SubObjects[1]
+
+        steps = int((refv.BoundBox.XMax - Area.BoundBox.XMin + offset_x) / gap_col)
+        startx = refv.BoundBox.XMax + offset_x - gap_col * steps
+
+        # todo end ----------------------------------------------------------------------------------
+
+        start = FreeCAD.Vector(startx, 0.0, 0.0)
+        pointsx = np.arange(start.x, Terrain.BoundBox.XMax, gap_col)
+
+
+        def getSection(line):
+            inter = Area.section([line])
+            pts = [ver.Point for ver in inter.Vertexes] #todo: sort points
+            for i in range(0, len(pts), 2):
+                line = Part.LineSegment(pts[i], pts[i + 1])
+                if line.length() >= rec.BoundBox.YLength:
+                    cnt = int(line.length() / (rec.BoundBox.YLength + gap_row))
+                    pointsy = np.arange(pts[i].y - rec.BoundBox.YLength, pts[i + 1].y, -gap_row)
+                    for point in pointsy:
+                        cp = rec.copy()
+                        cp.Placement.Base = FreeCAD.Vector(pts[i].x - rec.BoundBox.XLength / 2, point, 0.0) #- FreeCAD.Vector(rec.BoundBox.XLength / 2, rec.BoundBox.YLength, 0.0)
+                        cut = cp.cut([Area])
+                        #if cut.Area == 0:
+                        #    pl.append(cp.BoundBox.Center)
+                        Part.show(cp)
+                    Part.show(line.toShape())
+
+        lines = []
+        for point in pointsx:
+            p1 = FreeCAD.Vector(point, Area.BoundBox.YMax, 0.0)
+            p2 = FreeCAD.Vector(point, Area.BoundBox.YMin, 0.0)
+            line = Part.makePolygon([p1, p2])
+            #getSection(line)
+
+
+            p1 = FreeCAD.Vector(point - rec.BoundBox.XLength / 2, Area.BoundBox.YMax, 0.0)
+            p2 = FreeCAD.Vector(point - rec.BoundBox.XLength / 2, Area.BoundBox.YMin, 0.0)
+            line_l = Part.makePolygon([p1, p2])
+
+            p1 = FreeCAD.Vector(point + rec.BoundBox.XLength / 2, Area.BoundBox.YMax, 0.0)
+            p2 = FreeCAD.Vector(point + rec.BoundBox.XLength / 2, Area.BoundBox.YMin, 0.0)
+            line_r = Part.makePolygon([p1, p2])
+
+            Part.show(line_l)
+            Part.show(line_r)
+
+
+        '''
+        for line in lines:
+            inter = Area.section([line])
+            pts = [ver.Point for ver in inter.Vertexes]
+            for i in range(0, len(pts), 2):
+                line = Part.LineSegment(pts[i+1], pts[i])
+                if line.length() >= rec.BoundBox.YLength:
+                    Part.show(line.toShape())
+        '''
+
         '''
         for point in pl:
             newrack = FreeCAD.ActiveDocument.copyObject(self.Rack)
@@ -375,16 +482,17 @@ class _PVPlantPlacementTaskPanel:
 
         total_time = datetime.now() - starttime
         print(" -- Tiempo tardado:", total_time)
-        print("    --  Trackers creados: ", len(pl), ", tiempo por tracker: ", total_time / len(pl))
+        #print("    --  Trackers creados: ", len(pl), ", tiempo por tracker: ", total_time / len(pl))
 
     def accept(self):
         if self.Terrain is None:
             self.Terrain = getTerrain()
 
         if self.form.cbAlignFrames.isChecked():
-            self.calculateGrid()
+            self.calculateAlignedArray()
             return True
         else:
+            self.calculateNonAlignedArray()
             return True
 
 

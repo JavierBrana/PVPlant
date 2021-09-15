@@ -83,7 +83,7 @@ class _Frame(ArchComponent.Component):
 
         # Array de modulos: -------------------------------------------------------------------------------------------
         if not "ModuleCols" in pl:
-            bj.addProperty("App::PropertyQuantity",
+            obj.addProperty("App::PropertyQuantity",
                             "ModuleCols",
                             "Posicion de modulos",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
@@ -717,6 +717,7 @@ class _Tracker(_Frame):
                             ).AerialPole = 1050
 
         # Correas: ----------------------------------------------------------------------------------------------------
+        # 1. MainBeam: -------------------------------------------------------------------------------------------------
         if not "MainBeamHeight" in pl:
             obj.addProperty("App::PropertyLength",
                             "MainBeamHeight",
@@ -735,6 +736,14 @@ class _Tracker(_Frame):
                             "Beam",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).MainBeamAxisPosition = 1278
+        # 2. Costillas: ----------------------------------------------------------------------------------------------------
+        if not "ShowBeams" in pl:
+            obj.addProperty("App::PropertyBool",
+                            "ShowBeams",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ShowBeams = False
+
         if not "BeamHeight" in pl:
             obj.addProperty("App::PropertyLength",
                             "BeamHeight",
@@ -746,7 +755,7 @@ class _Tracker(_Frame):
                             "BeamWidth",
                             "Beam",
                             QT_TRANSLATE_NOOP("App::Property", "The width of this object")
-                            ).BeamWidth = 50
+                            ).BeamWidth = 83.2
         if not "Tool" in pl:
             obj.addProperty("App::PropertyLength",
                             "BeamOffset",
@@ -781,6 +790,7 @@ class _Tracker(_Frame):
         Re-adds the Arch component, and Arch wall properties."""
 
         ArchComponent.Component.onDocumentRestored(self, obj)
+        self.setProperties(obj)
         obj.Proxy = self
 
     def onChanged(self, fp, prop):
@@ -814,50 +824,6 @@ class _Tracker(_Frame):
         compound = Part.makeCompound([])
         offsetz = obj.MainBeamHeight.Value + obj.BeamHeight.Value
 
-        # Correa profile:
-        width = 83.2
-        heigth = 80
-        up = 27.8
-        thi = 3.2
-
-        p1 = FreeCAD.Vector(width / 2 - up, 0, thi)
-        p2 = FreeCAD.Vector(p1.x, 0, heigth)
-        p3 = FreeCAD.Vector(width / 2, 0, p2.z)
-        p4 = FreeCAD.Vector(p3.x, 0, heigth - thi)
-        p5 = FreeCAD.Vector(p4.x - up + thi, 0, p4.z)
-        p6 = FreeCAD.Vector(p5.x, 0, 0)
-
-        p7 = FreeCAD.Vector(-p6.x, 0, p6.z)
-        p8 = FreeCAD.Vector(-p5.x, 0, p5.z)
-        p9 = FreeCAD.Vector(-p4.x, 0, p4.z)
-        p10 = FreeCAD.Vector(-p3.x, 0, p3.z)
-        p11 = FreeCAD.Vector(-p2.x, 0, p2.z)
-        p12 = FreeCAD.Vector(-p1.x, 0, p1.z)
-
-        p = Part.makePolygon([p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p1])
-        p = Part.Face(p)
-        correa = p.extrude(FreeCAD.Vector(0, 428, 0))
-
-        # if ShowtotalArea:
-        '''
-        if obj.MotorGap.Value > 0:
-            ox = 0
-            ma = (totalw - obj.MotorGap.Value) / 2
-            for i in range(0,2):
-                p1 = FreeCAD.Vector(ox, 0, 0)
-                p2 = FreeCAD.Vector(ma + ox, 0, 0)
-                p3 = FreeCAD.Vector(ma + ox, totalh, 0)
-                p4 = FreeCAD.Vector(ox, totalh, 0)
-                polygon = Part.makePolygon([p1, p2, p3, p4, p1])
-                totalArea = Part.makeFilledFace(polygon.Edges)
-                totalArea.Placement.Base.x = -totalw / 2
-                totalArea.Placement.Base.y = -totalh / 2
-                totalArea.Placement.Base.z = offsetz
-                self.ModuleAreas.append(totalArea)
-
-                ox += ma + obj.MotorGap.Value
-        else:
-        '''
         p1 = FreeCAD.Vector(0, 0, 0)
         p2 = FreeCAD.Vector(totalw, 0, 0)
         p3 = FreeCAD.Vector(totalw, totalh, 0)
@@ -871,7 +837,8 @@ class _Tracker(_Frame):
         compound.add(self.ModuleAreas[0])
 
         mainbeam = Part.makeBox(totalw + obj.ModuleOffsetX.Value * 2, obj.MainBeamWidth.Value, obj.MainBeamHeight.Value)
-        # definir detalles --------------------------------------------------------------------------------------------
+        # details --------------------------------------------------------------------------------------------
+        '''
         edg = []
         max_length = max([edge.Length for edge in mainbeam.Edges])
         for edge in mainbeam.Edges:
@@ -888,16 +855,49 @@ class _Tracker(_Frame):
         tmp = tmp.makeFillet(6, edg)
         tmp = tmp.makeOffsetShape(-3, 0.1)
         mainbeam = mainbeam.cut(tmp)
-        # fin definir detalles ----------------------------------------------------------------------------------------
+        '''
+        # end details ----------------------------------------------------------------------------------------
         mainbeam.Placement.Base.x = -totalw / 2 - obj.ModuleOffsetX.Value
         mainbeam.Placement.Base.y = -obj.MainBeamWidth.Value / 2
         compound.add(mainbeam)
-
         mid = int(obj.ModuleCols.Value / 2)
-        if obj.ModuleViews:
 
+        # Correa profile:
+        if obj.ShowBeams: #TODO: make it in another function
+            up = 27.8   # todo
+            thi = 3.2   # todo
+
+            p1 = FreeCAD.Vector(obj.BeamWidth.Value / 2 - up, 0, thi)
+            p2 = FreeCAD.Vector(p1.x, 0, obj.BeamHeight.Value)
+            p3 = FreeCAD.Vector(obj.BeamWidth.Value / 2, 0, p2.z)
+            p4 = FreeCAD.Vector(p3.x, 0, obj.BeamHeight.Value - thi)
+            p5 = FreeCAD.Vector(p4.x - up + thi, 0, p4.z)
+            p6 = FreeCAD.Vector(p5.x, 0, 0)
+
+            p7 = FreeCAD.Vector(-p6.x, 0, p6.z)
+            p8 = FreeCAD.Vector(-p5.x, 0, p5.z)
+            p9 = FreeCAD.Vector(-p4.x, 0, p4.z)
+            p10 = FreeCAD.Vector(-p3.x, 0, p3.z)
+            p11 = FreeCAD.Vector(-p2.x, 0, p2.z)
+            p12 = FreeCAD.Vector(-p1.x, 0, p1.z)
+
+            p = Part.makePolygon([p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p1])
+            p = Part.Face(p)
+            profile = p.extrude(FreeCAD.Vector(0, 428, 0))
+
+            for col in range(int(obj.ModuleCols.Value)):
+                xx = totalArea.Placement.Base.x + (modulew + obj.ModuleColGap.Value) * col
+                if col >= mid:
+                    xx += float(obj.MotorGap.Value) - obj.ModuleColGap.Value
+                correaCopy = profile.copy()
+                correaCopy.Placement.Base.x = xx
+                correaCopy.Placement.Base.y = -428 / 2
+                correaCopy.Placement.Base.z = obj.MainBeamHeight.Value
+                self.ListModules.append(correaCopy)
+                compound.add(correaCopy)
+
+        if obj.ModuleViews:
             for row in range(int(obj.ModuleRows.Value)):
-                # Módulos
                 for col in range(int(obj.ModuleCols.Value)):
                     xx = totalArea.Placement.Base.x + (modulew + obj.ModuleColGap.Value) * col
                     if col >= mid:
@@ -910,25 +910,6 @@ class _Tracker(_Frame):
                     moduleCopy.Placement.Base.z = zz
                     self.ListModules.append(moduleCopy)
                     compound.add(moduleCopy)
-
-        # Correas
-        for col in range(int(obj.ModuleCols.Value)):
-            xx = totalArea.Placement.Base.x + (modulew + obj.ModuleColGap.Value) * col
-            if col >= mid:
-                xx += float(obj.MotorGap.Value) - obj.ModuleColGap.Value
-            yy = totalArea.Placement.Base.y + (moduleh + obj.ModuleRowGap.Value)
-            zz = offsetz
-            moduleCopy = module.copy()
-            moduleCopy.Placement.Base.x = xx + obj.ModuleColGap.Value / 2
-            moduleCopy.Placement.Base.y = yy
-            moduleCopy.Placement.Base.z = zz
-
-            correaCopy = correa.copy()
-            correaCopy.Placement.Base.x = xx
-            correaCopy.Placement.Base.y = -428 / 2
-            correaCopy.Placement.Base.z = obj.MainBeamHeight.Value
-            self.ListModules.append(correaCopy)
-            compound.add(correaCopy)
 
         compound.Placement.Base.z = obj.MainBeamAxisPosition.Value - (obj.MainBeamHeight.Value / 2)
         base = FreeCAD.Vector(0, 0, obj.MainBeamAxisPosition.Value)
