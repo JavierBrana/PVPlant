@@ -161,7 +161,7 @@ def Contours_Mesh(Mesh, minor = 1000, mayor = 5000,
 def Contours_Part(Terrain, minor = 1000, mayor = 5000,
                   minorColor=(0.0, 0.00, 0.80), mayorColor=(0.00, 0.00, 1.00),
                   minorLineWidth = 2, mayorLineWidth = 5,
-                  filter_size = 5): #filter_size de 3 a 21 y siempre impar
+                  filter_size = 5): #filter_size from 3 to 21 and alwais it must be odd
 
     filter_radius = int(filter_size / 2)
 
@@ -224,8 +224,9 @@ def Contours_Part(Terrain, minor = 1000, mayor = 5000,
                             y /= filter_size
                             PointList[a].x = x
                             PointList[a].y = y
+                    # 2. TODO: close wire
 
-                    # 2. Make lines
+                    # 3. Make lines
                     Contour = Draft.makeWire(PointList, closed=False, face=None, support=None)
                     Contour.MakeFace = False
                     Contour.Label = str(int(inc / 1000)) + "m"
@@ -656,15 +657,20 @@ class _OrientationTaskPanel(_generalTaskPanel):
         if land.isDerivedFrom("Part::Feature"):
             colorlist = []
             j = 0
+            minx = 99999
+            miny = 99999
             for face in land.Shape.Faces:
                 normal = face.normalAt(0, 0)
                 normal.z = 0
                 anglex = math.degrees(normal.getAngle(FreeCAD.Vector(1, 0, 0)))
                 angley = math.degrees(normal.getAngle(FreeCAD.Vector(0, 1, 0)))
+
+                minx = min([minx, anglex])
+                miny = min([miny, angley])
                 if angley >= 90:
                     anglex = 360.0 - anglex
 
-                print(anglex, " ", angley)
+                #print(anglex, " ", angley)
                 for i in range(1, len(self.ranges)):
                     if self.ranges[i][0] <= anglex <= self.ranges[i][1]:
                         colorlist.append(self.ranges[i][2])
@@ -673,6 +679,7 @@ class _OrientationTaskPanel(_generalTaskPanel):
                 if j == 100:
                     break
             land.ViewObject.DiffuseColor = colorlist
+            print("Angulos: ", math.degrees(minx), " - ", miny)
 
         # TODO: check this code:
         elif land.isDerivedFrom("Mesh::Feature"):
