@@ -1,6 +1,6 @@
 # /**********************************************************************
 # *                                                                     *
-# * Copyright (c) 2021 Javier Braña <javier.branagutierrez2@gmail.com>  *
+# * Copyright (c) 2021 Javier Braña <javier.branagutierrez@gmail.com>  *
 # *                                                                     *
 # * This program is free software; you can redistribute it and/or modify*
 # * it under the terms of the GNU Lesser General Public License (LGPL)  *
@@ -39,8 +39,10 @@ class PVPlantWorkbench (Workbench):
         import PVPlantGeoreferencing,  PVPlantRack, PVPlantPlacement, \
             PVPlantTerrainAnalisys, PVPlantSite, PVPlantImportGrid,PVPlantFence,\
             PVPlantFoundation, PVPlantCreateTerrainMesh, \
-            PVPlantTreeGenerator, exportPVSyst, PVPlantTrench, PVPEarthWorks, PVPlantBOQFrames, \
-            PVPlantStringBox, PVPlantCable, PVPlantPad, PVPlantRoad, PVPlantTerrain, \
+            PVPlantTreeGenerator, PVPlantTrench, PVPEarthWorks, \
+            PVPlantStringBox, PVPlantCable, PVPlantStringing, \
+            PVPlantPad, PVPlantRoad, PVPlantTerrain, \
+            exportDXF, exportPVSyst, PVPlantBOQMechanical, PVPlantBOQElectrical, PVPlantBOQCivil,\
             reload
 
         # A list of command names created in the line above
@@ -69,12 +71,16 @@ class PVPlantWorkbench (Workbench):
                     "PVPlantFenceGroup",
                     ]
 
-        self.list3 = ["ExportToPVSyst",
-                      "PVPlantBOQMechanical",
+        self.list3 = ["BOQCivil",
+                      "BOQMechanical",
+                      "BOQElectrical",
+                      "exportDXF",
+                      "ExportToPVSyst",
                     ]
 
         self.electricalList = ["PVPlantStringBox",
                                "PVPlantCable",
+                               "Stringing",
                               ]
 
         self.roads = ["PVPlantRoad",

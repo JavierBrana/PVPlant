@@ -37,16 +37,16 @@
      guidetolerance="10"
      inkscape:pageopacity="0"
      inkscape:pageshadow="2"
-     inkscape:window-width="1784"
-     inkscape:window-height="1129"
+     inkscape:window-width="2160"
+     inkscape:window-height="1361"
      id="namedview69"
      showgrid="false"
-     inkscape:zoom="0.71777344"
-     inkscape:cx="315.55918"
-     inkscape:cy="447.91292"
-     inkscape:window-x="0"
-     inkscape:window-y="0"
-     inkscape:window-maximized="0"
+     inkscape:zoom="1.4355469"
+     inkscape:cx="283.86394"
+     inkscape:cy="250.42721"
+     inkscape:window-x="-9"
+     inkscape:window-y="-9"
+     inkscape:window-maximized="1"
      inkscape:current-layer="Capa_1"
      inkscape:document-rotation="0"
      inkscape:pagecheckerboard="0" />
@@ -121,16 +121,6 @@
        style="stroke:none;stroke-width:0.999703;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
   </g>
   <g
-     id="g36"
-     transform="matrix(1.194355,0,0,1.194355,-162.51035,9.6851825)">
-    <path
-       clip-rule="evenodd"
-       d="M 512,315.795 V 70.905 68.352 c 0,-2.964 -0.968,-2.993 -3.11,-5.077 L 448.713,5.875 C 445.867,3.175 445.398,2.5 443.725,2.5 h -4.108 -61.058 c 74.613,99.893 78.867,279.958 23.502,392.352 -2.553,5.224 -5.223,10.242 -8.01,15.113 h 17.487 18.631 76.344 c 3.022,0 5.487,-2.494 5.487,-5.517 z"
-       fill="#d7e7ec"
-       fill-rule="evenodd"
-       id="path34" />
-  </g>
-  <g
      id="g40"
      transform="matrix(1.194355,0,0,1.194355,-162.51035,9.6851825)">
     <path
@@ -141,6 +131,16 @@
        id="path38" />
   </g>
   <g
+     id="g36"
+     transform="matrix(1.194355,0,0,1.194355,-162.51035,9.6851825)">
+    <path
+       clip-rule="evenodd"
+       d="M 512,315.795 V 70.905 68.352 c 0,-2.964 -0.968,-2.993 -3.11,-5.077 L 448.713,5.875 C 445.867,3.175 445.398,2.5 443.725,2.5 h -4.108 -61.058 c 74.613,99.893 78.867,279.958 23.502,392.352 -2.553,5.224 -5.223,10.242 -8.01,15.113 h 17.487 18.631 76.344 c 3.022,0 5.487,-2.494 5.487,-5.517 z"
+       fill="#d7e7ec"
+       fill-rule="evenodd"
+       id="path34" />
+  </g>
+  <g
      id="g44"
      transform="matrix(1.194355,0,0,1.194355,-162.51035,9.6851825)">
     <path
@@ -149,6 +149,18 @@
        fill="#b5c4cf"
        fill-rule="evenodd"
        id="path42" />
+  </g>
+  <g
+     id="g890"
+     transform="matrix(1.194355,0,0,1.194355,-162.51035,9.6851825)"
+     style="fill:none;stroke:#000000;stroke-width:4.18636;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1">
+    <path
+       clip-rule="evenodd"
+       d="M 512,315.795 V 70.905 68.352 67.501 c 0,-1.585 -0.675,-1.849 -3.11,-4.226 L 448.713,5.875 C 445.867,3.175 445.398,2.5 443.725,2.5 h -4.108 -245.316 c -3.022,0 -5.487,2.465 -5.487,5.488 v 396.46 c 0,3.023 2.465,5.517 5.487,5.517 h 312.212 c 3.022,0 5.487,-2.494 5.487,-5.517 z"
+       fill="#edf3f4"
+       fill-rule="evenodd"
+       id="path888"
+       style="fill:none;stroke:#000000;stroke-width:4.18636;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
   </g>
   <g
      id="g886"
@@ -183,17 +195,5 @@
            id="path14" />
       </g>
     </g>
-  </g>
-  <g
-     id="g890"
-     transform="matrix(1.194355,0,0,1.194355,-162.51035,9.6851825)"
-     style="fill:none;stroke:#000000;stroke-width:4.18636;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1">
-    <path
-       clip-rule="evenodd"
-       d="M 512,315.795 V 70.905 68.352 67.501 c 0,-1.585 -0.675,-1.849 -3.11,-4.226 L 448.713,5.875 C 445.867,3.175 445.398,2.5 443.725,2.5 h -4.108 -245.316 c -3.022,0 -5.487,2.465 -5.487,5.488 v 396.46 c 0,3.023 2.465,5.517 5.487,5.517 h 312.212 c 3.022,0 5.487,-2.494 5.487,-5.517 z"
-       fill="#edf3f4"
-       fill-rule="evenodd"
-       id="path888"
-       style="fill:none;stroke:#000000;stroke-width:4.18636;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
   </g>
 </svg>

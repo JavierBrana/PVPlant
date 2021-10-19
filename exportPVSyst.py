@@ -1,7 +1,29 @@
+# /**********************************************************************
+# *                                                                     *
+# * Copyright (c) 2021 Javier Braña <javier.branagutierrez@gmail.com>  *
+# *                                                                     *
+# * This program is free software; you can redistribute it and/or modify*
+# * it under the terms of the GNU Lesser General Public License (LGPL)  *
+# * as published by the Free Software Foundation; either version 2 of   *
+# * the License, or (at your option) any later version.                 *
+# * for detail see the LICENCE text file.                               *
+# *                                                                     *
+# * This program is distributed in the hope that it will be useful,     *
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of      *
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *
+# * GNU Library General Public License for more details.                *
+# *                                                                     *
+# * You should have received a copy of the GNU Library General Public   *
+# * License along with this program; if not, write to the Free Software *
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307*
+# * USA                                                                 *
+# *                                                                     *
+# ***********************************************************************
+
 import FreeCAD, Mesh, os, numpy, MeshPart, Arch, Draft
 
 if FreeCAD.GuiUp:
-    import FreeCADGui, os
+    import FreeCADGui
     from PySide import QtCore, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
     from DraftTools import translate
@@ -70,7 +92,6 @@ def triangulate(shape):
         return MeshPart.meshFromShape(Shape=shape, GrowthRate=grading, SegPerEdge=segsperedge,
                                       SegPerRadius=segsperradius, SecondOrder=secondorder, Optimize=optimize,
                                       AllowQuad=allowquads).Topology
-
 
 def export(exportList, filename, tessellation=1, colors=None):
     """export(exportList,filename,tessellation=1,colors=None) -- exports FreeCAD contents to a DAE file.
@@ -228,7 +249,6 @@ def export(exportList, filename, tessellation=1, colors=None):
 
 def exportToDAE(path):
     filename = path + ".dae"
-
 
 def exportToPVC(path, exportTerrain = False):
     filename = path + ".pvc"
@@ -632,7 +652,6 @@ def prettify(elem):
     reparsed = minidom.parseString(rough_string)
     return reparsed.toprettyxml(indent="  ")
 
-
 def exportToH2P(path):  # sólo válido para mesas
     filename = path + ".h2p"
     f2 = '{:.2f}'
@@ -683,7 +702,6 @@ def exportToH2P(path):  # sólo válido para mesas
 
     return True
 
-
 def H2PInsert(obj):
     import math
 
@@ -703,7 +721,6 @@ def H2PInsert(obj):
     st += f2.format(obj.Placement.Rotation.toEuler()[2]) + '\n'
 
     return st
-
 
 def H2PMesh(mesh, type):
     scale = 0.001  ## ver como se puede hacer para que sea general. Pasar de mm a m
@@ -725,7 +742,6 @@ def H2PMesh(mesh, type):
         st += f3.format(p3[0] * scale) + "," + f3.format(p3[1] * scale) + "," + f3.format(p3[2] * scale) + "\n"
 
     return st
-
 
 class _PVSystTaskPanel:
 
@@ -757,7 +773,6 @@ class _PVSystTaskPanel:
         FreeCADGui.Control.closeDialog()
         return True
 
-
 class _CommandExportToPVSyst:
     "Export to PVSyst"
 
@@ -777,7 +792,6 @@ class _CommandExportToPVSyst:
             return True
         else:
             return False
-
 
 if FreeCAD.GuiUp:
     FreeCADGui.addCommand('ExportToPVSyst', _CommandExportToPVSyst())

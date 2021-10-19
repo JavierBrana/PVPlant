@@ -1,8 +1,30 @@
-import FreeCAD, Draft
+# /**********************************************************************
+# *                                                                     *
+# * Copyright (c) 2021 Javier Braña <javier.branagutierrez@gmail.com>  *
+# *                                                                     *
+# * This program is free software; you can redistribute it and/or modify*
+# * it under the terms of the GNU Lesser General Public License (LGPL)  *
+# * as published by the Free Software Foundation; either version 2 of   *
+# * the License, or (at your option) any later version.                 *
+# * for detail see the LICENCE text file.                               *
+# *                                                                     *
+# * This program is distributed in the hope that it will be useful,     *
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of      *
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *
+# * GNU Library General Public License for more details.                *
+# *                                                                     *
+# * You should have received a copy of the GNU Library General Public   *
+# * License along with this program; if not, write to the Free Software *
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307*
+# * USA                                                                 *
+# *                                                                     *
+# ***********************************************************************
+
+import FreeCAD
 import ArchComponent
 import PVPlantSite
 import Part
-import math
+import Draft
 
 if FreeCAD.GuiUp:
     import FreeCADGui
@@ -15,19 +37,19 @@ else:
     def translate(ctxt, txt):
         return txt
 
+
     def QT_TRANSLATE_NOOP(ctxt, txt):
         return txt
     # \endcond
 
-__title__ = "FreeCAD Fixed Rack"
+__title__ = "PVPlant Frames"
 __author__ = "Javier Braña"
 __url__ = "http://www.sogos-solar.com"
 
 import os
-__dir__ = os.path.join(FreeCAD.getUserAppDataDir(), "Mod", "PVPlant")
-DirResources = os.path.join(__dir__, "Resources")
-DirIcons = os.path.join(DirResources, "Icons")
-DirImages = os.path.join(DirResources, "Images")
+import PVPlantResources
+from PVPlantResources import DirIcons as DirIcons
+
 
 class _Frame(ArchComponent.Component):
     "A Base Frame Obcject - Class"
@@ -41,13 +63,8 @@ class _Frame(ArchComponent.Component):
         # Does a IfcType exist?
         obj.IfcType = "Structural Item"
         obj.setEditorMode("IfcType", 1)
-        # obj.MoveWithHost = False
 
         self.totalAreaShape = None
-
-        self.ModuleArea = []
-        self.ListModules = []
-        self.ListPosts = []
         self.changed = True
 
     def setCommonProperties(self, obj):
@@ -74,6 +91,12 @@ class _Frame(ArchComponent.Component):
                             "Module",
                             QT_TRANSLATE_NOOP("App::Property", "The Length of this object")
                             ).ModuleHeight = 1996
+        if not "PoleCableLength" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "PoleCableLength",
+                            "Module",
+                            QT_TRANSLATE_NOOP("App::Property", "The Length of this object")
+                            ).PoleCableLength = 1200
         if not "ModulePower" in pl:
             obj.addProperty("App::PropertyQuantity",
                             "ModulePower",
@@ -108,16 +131,16 @@ class _Frame(ArchComponent.Component):
                             ).ModuleRowGap = 20
         if not "ModuleOffsetX" in pl:
             obj.addProperty("App::PropertyDistance",
-                           "ModuleOffsetX",
-                           "Posicion de modulos",
-                           QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                           ).ModuleOffsetX = 0
+                            "ModuleOffsetX",
+                            "Posicion de modulos",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleOffsetX = 0
         if not "ModuleOffsetY" in pl:
             obj.addProperty("App::PropertyDistance",
-                           "ModuleOffsetY",
-                           "Posicion de modulos",
-                           QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                           ).ModuleOffsetY = 0
+                            "ModuleOffsetY",
+                            "Posicion de modulos",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleOffsetY = 0
         if not "ModuleOrientation" in pl:
             obj.addProperty("App::PropertyEnumeration",
                             "ModuleOrientation",
@@ -128,6 +151,14 @@ class _Frame(ArchComponent.Component):
         if not "ModuleViews" in pl:
             obj.addProperty("App::PropertyBool",
                             "ModuleViews",
+                            "Posicion de modulos",
+                            QT_TRANSLATE_NOOP("App::Property",
+                                              "The facemaker type to use to build the profile of this object")
+                            ).ModuleViews = True
+
+        if not "Modules" in pl:
+            obj.addProperty("App::PropertyLinkSubListChild",
+                            "Modules",
                             "Posicion de modulos",
                             QT_TRANSLATE_NOOP("App::Property",
                                               "The facemaker type to use to build the profile of this object")
@@ -259,12 +290,15 @@ class _Frame(ArchComponent.Component):
     def getTotalAreaShape(self):
         return self.totalAreaShape
 
+
 ''' ------------------------------------------- Fixed Structure --------------------------------------------------- '''
-def makeRack(objectslist=None, baseobj=None, name="Rack"):
-    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Rack")
+
+
+def makeRack(name="Rack"):
+    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", name)
     _FixedRack(obj)
     _ViewProviderFixedRack(obj.ViewObject)
-    #FreeCAD.ActiveDocument.recompute()
+    # FreeCAD.ActiveDocument.recompute()
     return obj
 
 
@@ -374,7 +408,7 @@ class _FixedRack(_Frame):
 
     def onChanged(self, fp, prop):
         '''Do something when a property has changed'''
-        #FreeCAD.Console.PrintMessage("Change property: " + str(prop) + "\n")
+        # FreeCAD.Console.PrintMessage("Change property: " + str(prop) + "\n")
 
     def CalculateModuleArray(self, obj, totalh, totalw, moduleh, modulew):
         # ModuleThick
@@ -404,8 +438,9 @@ class _FixedRack(_Frame):
         p2 = FreeCAD.Vector(totalw, 0, 0)
         p3 = FreeCAD.Vector(totalw, totalh, 0)
         p4 = FreeCAD.Vector(0, totalh, 0)
-        polygon = Part.makePolygon([p1, p2, p3, p4, p1])
-        totalArea = Part.makeFilledFace(polygon.Edges)
+        totalArea = Part.Face(Part.makePolygon([p1, p2, p3, p4, p1]))
+
+        totalArea = Part.makePlane(totalw, totalh)
         totalArea.Placement.Base.x = -totalw / 2
         totalArea.Placement.Base.y = -totalh / 2
         totalArea.Placement.Base.z = obj.BeamHeight.Value
@@ -456,7 +491,6 @@ class _FixedRack(_Frame):
         # DistancePostsY
         '''
 
-
         postBack = Part.makeBox(obj.BackPostWidth.Value, obj.BackPostHeight.Value, obj.BackPostLength.Value)
         postFront = Part.makeBox(obj.FrontPostWidth.Value, obj.FrontPostHeight.Value, obj.FrontPostLength.Value)
 
@@ -473,9 +507,10 @@ class _FixedRack(_Frame):
         offsetZ = -obj.RammingDeep.Value
 
         for x in range(int(obj.NumberPostsX.Value)):
-            xx = offsetX + (obj.NumberPostsX.Value + obj.DistancePostsX.Value) * x #* math.cos(obj.Placement.Rotation.toEuler()[1])
+            xx = offsetX + (
+                        obj.NumberPostsX.Value + obj.DistancePostsX.Value) * x  # * math.cos(obj.Placement.Rotation.toEuler()[1])
             yy = offsetY
-            zz = offsetZ #* math.sin(obj.Placement.Rotation.toEuler()[1])
+            zz = offsetZ  # * math.sin(obj.Placement.Rotation.toEuler()[1])
 
             postCopy = postBack.copy()
             postCopy.Placement.Base.x = xx
@@ -487,9 +522,9 @@ class _FixedRack(_Frame):
 
             if obj.FrontPost:
                 postCopy = postFront.copy()
-                postCopy.Placement.Base.x =  xx
+                postCopy.Placement.Base.x = xx
                 postCopy.Placement.Base.y = -yy
-                postCopy.Placement.Base.z =  zz
+                postCopy.Placement.Base.z = zz
                 base = FreeCAD.Vector(xx, yy, obj.FrontPostHeight.Value - offsetZ)
                 postCopy = postCopy.rotate(base, FreeCAD.Vector(0, 1, 0), -angle)
                 self.ListPosts.append(postCopy)
@@ -519,7 +554,6 @@ class _FixedRack(_Frame):
         obj.Width = totalw
         obj.Length = totalh
 
-
         # hacer el shape:
         self.CalculateModuleArray(obj, totalh, totalw, h, w)
         self.CalculatePosts(obj, totalh, totalw)
@@ -535,6 +569,7 @@ class _FixedRack(_Frame):
         if angle > obj.MaxLengthwiseTilt:
             obj.ViewObject.ShapeColor = (1.0, 0.0, 0.0)
         print("fin")
+
 
 class _ViewProviderFixedRack(ArchComponent.ViewProviderComponent):
     "A View Provider for the Pipe object"
@@ -580,6 +615,7 @@ class _ViewProviderFixedRack(ArchComponent.ViewProviderComponent):
 
         return False
 
+
 class _FixedRackTaskPanel:
     def __init__(self, obj=None):
         self.obj = obj
@@ -587,16 +623,15 @@ class _FixedRackTaskPanel:
         # -------------------------------------------------------------------------------------------------------------
         # Module widget form
         # -------------------------------------------------------------------------------------------------------------
-        self.formRack = FreeCADGui.PySideUic.loadUi(__dir__ + "/PVPlantRack.ui")
+        self.formRack = FreeCADGui.PySideUic.loadUi(PVPlantResources.__dir__ + "/PVPlantRack.ui")
         self.formRack.widgetTracker.setVisible(False)
         self.formRack.comboFrameType.currentIndexChanged.connect(self.selectionchange)
 
-        self.formPiling = FreeCADGui.PySideUic.loadUi(__dir__ + "/PVPlantRackFixedPiling.ui")
+        self.formPiling = FreeCADGui.PySideUic.loadUi(PVPlantResources.__dir__ + "/PVPlantRackFixedPiling.ui")
         self.formPiling.editBreadthwaysNumOfPost.valueChanged.connect(self.editBreadthwaysNumOfPostChange)
         self.formPiling.editAlongNumOfPost.valueChanged.connect(self.editAlongNumOfPostChange)
 
         self.form = [self.formRack, self.formPiling]
-
 
     def selectionchange(self, i):
         vis = False
@@ -661,20 +696,16 @@ class _Tracker(_Frame):
         obj.ModuleRowGap = 20
         obj.Tilt = 0
 
-        # Does a IfcType exist?
-        # obj.IfcType = "Fence"
-        # obj.MoveWithHost = False
-
     def setProperties(self, obj):
         pl = obj.PropertiesList
 
         # Array de modulos: -------------------------------------------------------------------------------------------
         if not "MotorGap" in pl:
             obj.addProperty("App::PropertyDistance",
-                        "MotorGap",
-                        "Posicion de modulos",
-                        QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                        ).MotorGap = 550
+                            "MotorGap",
+                            "Posicion de modulos",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MotorGap = 550
 
         # Poles: ------------------------------------------------------------------------------------------------------
         if not "PoleHeight" in pl:
@@ -683,12 +714,14 @@ class _Tracker(_Frame):
                             "Pole",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).PoleHeight = 160
+
         if not "PoleWidth" in pl:
             obj.addProperty("App::PropertyLength",
                             "PoleWidth",
                             "Pole",
                             QT_TRANSLATE_NOOP("App::Property", "The width of this object")
                             ).PoleWidth = 80
+
         if not "PoleLength" in pl:
             obj.addProperty("App::PropertyLength",
                             "PoleLength",
@@ -701,14 +734,17 @@ class _Tracker(_Frame):
             obj.addProperty("App::PropertyQuantity",
                             "NumberPole",
                             "Poles",
-                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            "The total number of poles"
                             ).NumberPole = 7
+
         if not "DistancePole" in pl:
-            obj.addProperty("App::PropertyFloatList",
+            obj.addProperty("App::PropertyFloatList",  # No list of Lenght so I use float list
                             "DistancePole",
                             "Poles",
-                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            "Distance between poles starting from the left and from the first photovoltaic module "
+                            "without taking into account the offsets"
                             ).DistancePole = [1500.0, 3000.0, 7000.0, 7000.0, 7000.0, 7000.0, 7000.0]
+
         if not "AerialPole" in pl:
             obj.addProperty("App::PropertyLength",
                             "AerialPole",
@@ -724,12 +760,14 @@ class _Tracker(_Frame):
                             "Beam",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).MainBeamHeight = 120
+
         if not "MainBeamWidth" in pl:
             obj.addProperty("App::PropertyLength",
                             "MainBeamWidth",
                             "Beam",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).MainBeamWidth = 120
+
         if not "MainBeamAxisPosition" in pl:
             obj.addProperty("App::PropertyLength",
                             "MainBeamAxisPosition",
@@ -750,18 +788,21 @@ class _Tracker(_Frame):
                             "Beam",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).BeamHeight = 80
-        if not "BeamOffset" in pl:
+
+        if not "BeamWidth" in pl:
             obj.addProperty("App::PropertyLength",
                             "BeamWidth",
                             "Beam",
                             QT_TRANSLATE_NOOP("App::Property", "The width of this object")
                             ).BeamWidth = 83.2
-        if not "Tool" in pl:
+
+        if not "BeamOffset" in pl:
             obj.addProperty("App::PropertyLength",
                             "BeamOffset",
                             "Beam",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).BeamOffset = 50
+
         if not "BeamSpacing" in pl:
             obj.addProperty("App::PropertyLength",
                             "BeamSpacing",
@@ -776,6 +817,7 @@ class _Tracker(_Frame):
                             "Frame",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).MaxPhi = 60
+
         if not "MinPhi" in pl:
             obj.addProperty("App::PropertyAngle",
                             "MinPhi",
@@ -793,50 +835,94 @@ class _Tracker(_Frame):
         self.setProperties(obj)
         obj.Proxy = self
 
-    def onChanged(self, fp, prop):
+    def onChanged(self, obj, prop):
         '''Do something when a property has changed'''
 
+        '''
+        ['Additions', 'AerialPole', 'Axis', 'Base', 'BeamHeight', 'BeamOffset', 'BeamSpacing', 'BeamWidth', 'CloneOf', 
+        'Description', 'DistancePole', 'ExpressionEngine', 'HiRes', 'HorizontalArea', 'IfcData', 'IfcProperties', 
+        'IfcType', 'Label', 'Label2', 'Length', 'MainBeamAxisPosition', 'MainBeamHeight', 'MainBeamWidth', 'Material', 
+        'MaxLengthwiseTilt', 'MaxPhi', 'MinPhi', 'ModuleColGap', 'ModuleCols', 'ModuleHeight', 'ModuleOffsetX', 
+        'ModuleOffsetY', 'ModuleOrientation', 'ModulePower', 'ModuleRowGap', 'ModuleRows', 'ModuleThick', 'ModuleViews',
+        'ModuleWidth', 'Modules', 'MotorGap', 'MoveBase', 'MoveWithHost', 'NumberPole', 'PerimeterLength', 'Placement',
+        'PoleCableLength', 'PoleHeight', 'PoleLength', 'PoleWidth', 'Proxy', 'Shape', 'ShowBeams', 'StandardCode', 
+        'Subtractions', 'Tag', 'Tilt', 'TotalAreaShape', 'VerticalArea', 'Visibility', 'Width']
+        '''
+
         self.changed = True
+        '''
+        if prop in ['BeamHeight', 'BeamOffset', 'BeamSpacing', 'BeamWidth', 'MainBeamAxisPosition', 'MainBeamHeight', 'MainBeamWidth',
+                    'ModuleColGap', 'ModuleCols', 'ModuleHeight', 'ModuleOffsetX', 'ModuleOffsetY', 'ModuleOrientation',
+                    'ModuleRowGap', 'ModuleRows', 'ModuleThick', 'ModuleViews', 'ModuleWidth', 'MotorGap',
+                    'AerialPole', 'DistancePole',
+                    'NumberPole', 'PoleHeight', 'PoleLength', 'PoleWidth', 'ShowBeams']:
 
-        if prop in ["MaxPhi", "MinPhi", ]:
-            self.changed = False
-
-        if prop == "Tilt":
-            '''
-            if not hasattr(self, "obj"):
-                return
-            if hasattr(self.obj, "MaxPhi"):
-                if self.obj.Tilt > self.obj.MaxPhi:
-                    self.obj.Tilt = self.obj.MaxPhi
-
-                if self.obj.Tilt < self.obj.MinPhi:
-                    self.obj.Tilt = self.obj.MinPhi
-
-            compound = self.obj.Shape.SubShapes[0]
-            compound.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1,0,0), 45)
-            #a = compound.rotate(base, FreeCAD.Vector(1, 0, 0), obj.Tilt)
             self.changed = True
-            '''
+
+        # Properties that rotate the Modules:
+        if prop == "Tilt":
+            if len(obj.Shape.SubShapes) == 0:
+                return
+
+            all = obj.Shape.SubShapes[0]
+            mainBean = all.SubShapes[1].SubShapes[0]
+            faces = []
+            minArea = min([face.Area for face in mainBean.Faces])
+            for face in mainBean.Faces:
+                if face.Area == minArea:
+                    faces.append(face)
+            axis = faces[0].CenterOfMass - faces[1].CenterOfMass
+            center = faces[0].CenterOfMass
+            print(center, " - ", axis)
+            all.Placement.rotate(center, axis, obj.getPropertyByName(prop))
+            obj.Shape = Part.makeCompound([all, obj.Shape.SubShapes[1]])
+
+        # Properties that rotate the Poles:
+        if prop == "Placement":
+            if len(obj.Shape.SubShapes) == 0:
+                return
+            pl = obj.getPropertyByName(prop)
+            angle = obj.Placement.Rotation.toEuler()[1]
+            poles = obj.Shape.SubShapes[1].SubShapes
+            newpoles = Part.makeCompound([])
+            for pole in poles:
+                center = pole.BoundBox.Center
+                base = FreeCAD.Vector(center.x, center.y, pole.BoundBox.ZMax)
+                newpoles.add(pole.rotate(base, FreeCAD.Vector(0, 1, 0), -angle))
+            obj.Shape = Part.makeCompound([obj.Shape.SubShapes[0], newpoles])
+        '''
 
     def CalculateModuleArray(self, obj, totalh, totalw, moduleh, modulew):
-
         module = Part.makeBox(modulew, moduleh, obj.ModuleThick.Value)
         compound = Part.makeCompound([])
+        offsetx = -totalw / 2
+        offsety = -totalh / 2
         offsetz = obj.MainBeamHeight.Value + obj.BeamHeight.Value
 
-        p1 = FreeCAD.Vector(0, 0, 0)
-        p2 = FreeCAD.Vector(totalw, 0, 0)
-        p3 = FreeCAD.Vector(totalw, totalh, 0)
-        p4 = FreeCAD.Vector(0, totalh, 0)
-        polygon = Part.makePolygon([p1, p2, p3, p4, p1])
-        totalArea = Part.Face(polygon)
-        totalArea.Placement.Base.x = -totalw / 2
-        totalArea.Placement.Base.y = -totalh / 2
-        totalArea.Placement.Base.z = offsetz
-        self.ModuleAreas.append(totalArea)
-        compound.add(self.ModuleAreas[0])
+        if obj.ModuleViews:
+            mid = int(obj.ModuleCols.Value / 2)
+            for row in range(int(obj.ModuleRows.Value)):
+                for col in range(int(obj.ModuleCols.Value)):
+                    xx = offsetx + (modulew + obj.ModuleColGap.Value) * col
+                    if col >= mid:
+                        xx += obj.MotorGap.Value - obj.ModuleColGap.Value
+                    yy = offsety + (moduleh + obj.ModuleRowGap.Value) * row
+                    zz = offsetz
+                    moduleCopy = module.copy()
+                    moduleCopy.Placement.Base = FreeCAD.Vector(xx, yy, zz)
+                    compound.add(moduleCopy)
+        else:
+            totalArea = Part.makePlane(totalw, totalh)
+            totalArea.Placement.Base = FreeCAD.Vector(offsetx, offsety, offsetz)
+            compound.add(totalArea)
+        return compound
 
-        mainbeam = Part.makeBox(totalw + obj.ModuleOffsetX.Value * 2, obj.MainBeamWidth.Value, obj.MainBeamHeight.Value)
+    def calculateBeams(self, obj, totalh, totalw, moduleh, modulew):
+        ''' make mainbeam and modules beams '''
+        compound = Part.makeCompound([])
+        mainbeam = Part.makeBox(totalw + obj.ModuleOffsetX.Value * 2,
+                                obj.MainBeamWidth.Value,
+                                obj.MainBeamHeight.Value)
         # details --------------------------------------------------------------------------------------------
         '''
         edg = []
@@ -860,12 +946,13 @@ class _Tracker(_Frame):
         mainbeam.Placement.Base.x = -totalw / 2 - obj.ModuleOffsetX.Value
         mainbeam.Placement.Base.y = -obj.MainBeamWidth.Value / 2
         compound.add(mainbeam)
-        mid = int(obj.ModuleCols.Value / 2)
 
         # Correa profile:
-        if obj.ShowBeams: #TODO: make it in another function
-            up = 27.8   # todo
-            thi = 3.2   # todo
+        if obj.ShowBeams:  # TODO: make it in another function
+            mid = int(obj.ModuleCols.Value / 2)
+
+            up = 27.8  # todo
+            thi = 3.2  # todo
 
             p1 = FreeCAD.Vector(obj.BeamWidth.Value / 2 - up, 0, thi)
             p2 = FreeCAD.Vector(p1.x, 0, obj.BeamHeight.Value)
@@ -896,38 +983,11 @@ class _Tracker(_Frame):
                 self.ListModules.append(correaCopy)
                 compound.add(correaCopy)
 
-        if obj.ModuleViews:
-            for row in range(int(obj.ModuleRows.Value)):
-                for col in range(int(obj.ModuleCols.Value)):
-                    xx = totalArea.Placement.Base.x + (modulew + obj.ModuleColGap.Value) * col
-                    if col >= mid:
-                        xx += float(obj.MotorGap.Value) - obj.ModuleColGap.Value
-                    yy = totalArea.Placement.Base.y + (moduleh + obj.ModuleRowGap.Value) * row
-                    zz = offsetz
-                    moduleCopy = module.copy()
-                    moduleCopy.Placement.Base.x = xx
-                    moduleCopy.Placement.Base.y = yy
-                    moduleCopy.Placement.Base.z = zz
-                    self.ListModules.append(moduleCopy)
-                    compound.add(moduleCopy)
-
-        compound.Placement.Base.z = obj.MainBeamAxisPosition.Value - (obj.MainBeamHeight.Value / 2)
-        base = FreeCAD.Vector(0, 0, obj.MainBeamAxisPosition.Value)
-        a = compound.rotate(base, FreeCAD.Vector(1, 0, 0), obj.Tilt)
-        #???compound.Placement.Rotation = FreeCAD.Rotation()
-
-        del mainbeam
-        del module
-        del compound
-        del self.ListModules[:]
-
-        self.ListModules.append(a)
+        return compound
 
     def CalculatePosts(self, obj, totalh, totalw):
-
-        import Part, math
         posttmp = Part.makeBox(obj.PoleWidth.Value, obj.PoleHeight.Value, obj.PoleLength.Value)
-        #compound = Part.makeCompound([])
+        compound = Part.makeCompound([])
 
         angle = obj.Placement.Rotation.toEuler()[1]
         offsetX = - totalw / 2
@@ -946,16 +1006,25 @@ class _Tracker(_Frame):
             postCopy.Placement.Base.z = zz
             base = FreeCAD.Vector(xx, yy, obj.PoleHeight.Value - offsetZ)
             postCopy = postCopy.rotate(base, FreeCAD.Vector(0, 1, 0), -angle)
-            self.ListPosts.append(postCopy)
+            compound.add(postCopy)
+        return compound
 
     def execute(self, obj):
+        # obj.Shape = compound
+        # |- Modules and Beams = compound
+        # |-- Modules array: compound
+        # |___ Modules: solid
+        # |-- Beams
+        # |--- MainBeam: solid
+        # |--- Secundary Beams: solid
+        # |- Poles array: compound
+        # |-- Poles: solid
+        #
+        # once you have done this structure you don´t need recompute everything, only the part you need
 
+        print(" -----   Execute: ", self.changed)
         if self.changed:
-            self.ModuleAreas = []
-            self.ListModules = []
-            self.ListPosts = []
-            self.ListBeams = []
-
+            self.changed = False
             pl = obj.Placement
 
             if obj.ModuleOrientation == "Portrait":
@@ -971,29 +1040,22 @@ class _Tracker(_Frame):
             obj.Width = totalw + obj.ModuleOffsetX.Value * 2
             obj.Length = totalh
 
-            # hacer el shape:
-            self.CalculateModuleArray(obj, totalh, totalw, h, w)
-            self.CalculatePosts(obj, totalh, totalw)
-
-            allShapes = []
-            allShapes.extend(self.ListModules)
-            allShapes.extend(self.ListPosts)
-            compound = Part.makeCompound(allShapes)
-            obj.Shape = compound
+            modules = self.CalculateModuleArray(obj, totalh, totalw, h, w)
+            beams = self.calculateBeams(obj, totalh, totalw, h, w)
+            poles = self.CalculatePosts(obj, totalh, totalw)
+            compound = Part.makeCompound([modules, beams])
+            compound.Placement.rotate(FreeCAD.Vector(0, 0, obj.MainBeamAxisPosition.Value),
+                                      FreeCAD.Vector(1, 0, 0),
+                                      obj.Tilt)
+            compound.Placement.Base.z = obj.MainBeamAxisPosition.Value - (obj.MainBeamHeight.Value / 2)
+            obj.Shape = Part.makeCompound([compound, poles])
             obj.Placement = pl
 
             angle = obj.Placement.Rotation.toEuler()[1]
             if angle > obj.MaxLengthwiseTilt:
                 obj.ViewObject.ShapeColor = (1.0, 0.0, 0.0)
-
-            self.totalAreaShape = self.ModuleAreas[0]
-            #obj.TotalAreaShape = self.ModuleAreas[0].Shape
-
-            del self.ModuleAreas[:]
-            del self.ListModules[:]
-            del self.ListPosts[:]
-            del allShapes[:]
-            self.changed = False
+            else:
+                obj.ViewObject.ShapeColor = (1.0, 1.0, 1.0)
 
 
 class _ViewProviderTracker(ArchComponent.ViewProviderComponent):
@@ -1028,13 +1090,11 @@ class _ViewProviderTracker(ArchComponent.ViewProviderComponent):
         if (mode == 0) and hasattr(self, "Object"):
             taskd = _TrackerTaskPanel(self.Object)
             taskd.obj = self.Object
-            #taskd.update()
+            # taskd.update()
             FreeCADGui.Control.showDialog(taskd)
             return True
 
         return False
-
-
 
 
 class _TrackerTaskPanel:
@@ -1042,7 +1102,7 @@ class _TrackerTaskPanel:
 
         if not (obj is None):
             self.new = True
-            self.ojb = makeRack()
+            self.obj = makeRack()
         else:
             self.new = False
             self.obj = obj
@@ -1050,11 +1110,11 @@ class _TrackerTaskPanel:
         # -------------------------------------------------------------------------------------------------------------
         # Module widget form
         # -------------------------------------------------------------------------------------------------------------
-        self.formRack = FreeCADGui.PySideUic.loadUi(__dir__ + "/PVPlantRack.ui")
+        self.formRack = FreeCADGui.PySideUic.loadUi(PVPlantResources.__dir__ + "/PVPlantRack.ui")
         self.formRack.widgetTracker.setVisible(False)
         self.formRack.comboFrameType.currentIndexChanged.connect(self.selectionchange)
 
-        self.formPiling = FreeCADGui.PySideUic.loadUi(__dir__ + "/PVPlantRackFixedPiling.ui")
+        self.formPiling = FreeCADGui.PySideUic.loadUi(PVPlantResources.__dir__ + "/PVPlantRackFixedPiling.ui")
         self.formPiling.editBreadthwaysNumOfPost.valueChanged.connect(self.editBreadthwaysNumOfPostChange)
         self.formPiling.editAlongNumOfPost.valueChanged.connect(self.editAlongNumOfPostChange)
 
@@ -1091,10 +1151,6 @@ class _TrackerTaskPanel:
         return True
 
 
-
-
-
-
 class _FrameTaskPanel:
 
     def __init__(self, obj=None):
@@ -1106,12 +1162,12 @@ class _FrameTaskPanel:
             self.new = False
             self.obj = obj
 
-        self.formRack = FreeCADGui.PySideUic.loadUi(__dir__ + "/PVPlantRack.ui")
+        self.formRack = FreeCADGui.PySideUic.loadUi(PVPlantResources.__dir__ + "/PVPlantRack.ui")
         self.formRack.widgetTracker.setVisible(False)
         self.formRack.comboFrameType.setEnable(self.new)
         self.formRack.comboFrameType.currentIndexChanged.connect(self.selectionchange)
 
-        self.formPiling = FreeCADGui.PySideUic.loadUi(__dir__ + "/PVPlantRackFixedPiling.ui")
+        self.formPiling = FreeCADGui.PySideUic.loadUi(PVPlantResources.__dir__ + "/PVPlantRackFixedPiling.ui")
         self.formPiling.editBreadthwaysNumOfPost.valueChanged.connect(self.editBreadthwaysNumOfPostChange)
         self.formPiling.editAlongNumOfPost.valueChanged.connect(self.editAlongNumOfPostChange)
 
@@ -1214,7 +1270,6 @@ if FreeCAD.GuiUp:
     FreeCADGui.addCommand('PVPlantFixedRack', _CommandFixedRack())
     FreeCADGui.addCommand('PVPlantTracker', _CommandTracker())
     FreeCADGui.addCommand('RackType', CommandRackGroup())
-
 
     '''# -*- coding: utf-8 -*-
 # http://forum.freecadweb.org/viewtopic.php?f=22&t=16079

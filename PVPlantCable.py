@@ -1,15 +1,38 @@
+# /**********************************************************************
+# *                                                                     *
+# * Copyright (c) 2021 Javier Braña <javier.branagutierrez@gmail.com>  *
+# *                                                                     *
+# * This program is free software; you can redistribute it and/or modify*
+# * it under the terms of the GNU Lesser General Public License (LGPL)  *
+# * as published by the Free Software Foundation; either version 2 of   *
+# * the License, or (at your option) any later version.                 *
+# * for detail see the LICENCE text file.                               *
+# *                                                                     *
+# * This program is distributed in the hope that it will be useful,     *
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of      *
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *
+# * GNU Library General Public License for more details.                *
+# *                                                                     *
+# * You should have received a copy of the GNU Library General Public   *
+# * License along with this program; if not, write to the Free Software *
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307*
+# * USA                                                                 *
+# *                                                                     *
+# ***********************************************************************
+
+
 import FreeCAD
 import ArchComponent
 
 if FreeCAD.GuiUp:
     import FreeCADGui, os
-    from PySide import QtCore, QtGui
-    from DraftTools import translate
+    from PySide import QtCore
     from PySide.QtCore import QT_TRANSLATE_NOOP
 else:
     # \cond
     def translate(ctxt, txt):
         return txt
+
 
     def QT_TRANSLATE_NOOP(ctxt, txt):
         return txt
@@ -23,24 +46,22 @@ except AttributeError:
 
 import PVPlantResources
 
+
 def makeCable():
     obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Cable")
     _Cable(obj)
     _ViewProviderCable(obj.ViewObject)
     FreeCAD.ActiveDocument.recompute()
-    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+    #FreeCADGui.ActiveDocument.ActiveView.fitAll()
     return obj
+
 
 class _Cable(ArchComponent.Component):
     "A Base Frame Obcject - Class"
 
     def __init__(self, obj):
-        # Definición de Variables:
         ArchComponent.Component.__init__(self, obj)
-        self.obj = obj
         self.setProperties(obj)
-        self.Type = "Cable"
-
         self.route = None
 
         obj.Proxy = self
@@ -48,41 +69,47 @@ class _Cable(ArchComponent.Component):
         obj.setEditorMode("IfcType", 1)
 
     def setProperties(self, obj):
-        # Definicion de Propiedades:
 
-        obj.addProperty("App::PropertyLink",
-                        "From",
-                        "Connections",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection "))
+        pl = obj.PropertiesList
+        if not ("From" in pl):
+            obj.addProperty("App::PropertyLink",
+                            "From",
+                            "Connections",
+                            QT_TRANSLATE_NOOP("App::Property", "Connection "))
 
-        obj.addProperty("App::PropertyLink",
-                        "To",
-                        "Connections",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection "))
+        if not ("To" in pl):
+            obj.addProperty("App::PropertyLink",
+                            "To",
+                            "Connections",
+                            QT_TRANSLATE_NOOP("App::Property", "Connection "))
 
-        obj.addProperty("App::PropertyDistance",
-                        "Distance",
-                        "Cable",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Distance = 0
-        obj.setEditorMode("Distance", 1)
 
-        obj.addProperty("App::PropertyDistance",
-                        "Diameter",
-                        "Cable",
-                        QT_TRANSLATE_NOOP("App::Property", "Diameter")).Diameter = 6.6
+        if not ("Distance" in pl):
+            obj.addProperty("App::PropertyDistance",
+                            "Distance",
+                            "Cable",
+                            QT_TRANSLATE_NOOP("App::Property", "Connection")).Distance = 0
+            obj.setEditorMode("Distance", 1)
 
-        obj.addProperty("App::PropertyArea",
-                        "Seccion",
-                        "Cable",
-                        QT_TRANSLATE_NOOP("App::Property", "Sección"))
+        if not ("ExternalDiameter" in pl):
+            obj.addProperty("App::PropertyDistance",
+                            "ExternalDiameter",
+                            "Cable",
+                            QT_TRANSLATE_NOOP("App::Property", "Diameter")).ExternalDiameter = 6.6
+
+        if not ("Section" in pl):
+            obj.addProperty("App::PropertyArea",
+                            "Section",
+                            "Cable",
+                            QT_TRANSLATE_NOOP("App::Property", "Sección"))
+        self.Type = "Cable"
 
     def onDocumentRestored(self, obj):
         """Method run when the document is restored.
         Re-adds the Arch component, and object properties."""
 
         ArchComponent.Component.onDocumentRestored(self, obj)
-        self.obj = obj
-        self.Type = "Cable"
+        self.setProperties(obj)
         obj.Proxy = self
 
     def __getstate__(self):
@@ -91,9 +118,24 @@ class _Cable(ArchComponent.Component):
     def __setstate__(self, state):
         self.route = state
 
+    def onChanged(self, obj, prop):
+        '''Do something when a property has changed'''
+
     def execute(self, obj):
         import Part, DraftGeomUtils, math
         import Draft
+
+        def getPoint(val):
+            if val.Proxy.Type == 'String':
+                return val.StringPoles[0]
+
+            elif val.Proxy.Type == 'StringBox':
+                #return val.PositiveIn1.CenterOfMass
+                input = val.Shape.SubShapes[2].SubShapes[0]
+                return input.CenterOfMass
+
+            else:
+                val.Shape.Faces[0].CenterOfMass
 
         if not obj.From or not obj.To:
             return
@@ -102,23 +144,17 @@ class _Cable(ArchComponent.Component):
         if self.route:
             # Si tiene ruta, dibujar ruteado
             print("Ruteado")
+            w = self.route
 
 
         else:
             line = Part.LineSegment()
-            line.StartPoint = obj.From.Shape.Faces[4].CenterOfMass  # obj.From.Placement.Base
-            line.EndPoint = obj.To.Shape.Faces[4].CenterOfMass  # obj.To.Placement.Base
+            line.StartPoint = getPoint(obj.From)
+            line.EndPoint = getPoint(obj.To)
             w = Part.Wire(line.toShape())
 
-        p = Part.Wire([Part.Circle(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 0, 1), obj.Diameter.Value / 2).toShape()])
-        '''
-        if obj.WallThickness.Value and (obj.WallThickness.Value < obj.Diameter.Value / 2):
-            p2 = Part.Wire([Part.Circle(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 0, 1),
-                                        (obj.Diameter.Value / 2 - obj.WallThickness.Value)).toShape()])
-            p = Part.Face(p)
-            p2 = Part.Face(p2)
-            p = p.cut(p2)
-        '''
+        p = Part.Wire([Part.Circle(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 0, 1), obj.ExternalDiameter.Value / 2).toShape()])
+
         if hasattr(p, "CenterOfMass"):
             c = p.CenterOfMass
         else:
@@ -136,15 +172,15 @@ class _Cable(ArchComponent.Component):
         shapes = []
         if p.Faces:
             for f in p.Faces:
-                sh = w.makePipeShell([f.OuterWire],True,False,2)
+                sh = w.makePipeShell([f.OuterWire], True, False, 2)
                 for shw in f.Wires:
                     if shw.hashCode() != f.OuterWire.hashCode():
-                        sh2 = w.makePipeShell([shw],True,False,2)
+                        sh2 = w.makePipeShell([shw], True, False, 2)
                         sh = sh.cut(sh2)
                 shapes.append(sh)
         elif p.Wires:
             for pw in p.Wires:
-                sh = w.makePipeShell([pw],True,False,2)
+                sh = w.makePipeShell([pw], True, False, 2)
                 shapes.append(sh)
 
         obj.Shape = Part.makeCompound(shapes)
@@ -158,7 +194,6 @@ class _ViewProviderCable(ArchComponent.ViewProviderComponent):
 
     def getIcon(self):
         return str(os.path.join(PVPlantResources.DirIcons, "cable.png"))
-
 
 
 class _CommandCable:
@@ -176,6 +211,7 @@ class _CommandCable:
             return True
         else:
             return False
+
 
 if FreeCAD.GuiUp:
     FreeCADGui.addCommand('PVPlantCable', _CommandCable())

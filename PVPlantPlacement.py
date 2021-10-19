@@ -1,12 +1,35 @@
+# /**********************************************************************
+# *                                                                     *
+# * Copyright (c) 2021 Javier Braña <javier.branagutierrez@gmail.com>  *
+# *                                                                     *
+# * This program is free software; you can redistribute it and/or modify*
+# * it under the terms of the GNU Lesser General Public License (LGPL)  *
+# * as published by the Free Software Foundation; either version 2 of   *
+# * the License, or (at your option) any later version.                 *
+# * for detail see the LICENCE text file.                               *
+# *                                                                     *
+# * This program is distributed in the hope that it will be useful,     *
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of      *
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *
+# * GNU Library General Public License for more details.                *
+# *                                                                     *
+# * You should have received a copy of the GNU Library General Public   *
+# * License along with this program; if not, write to the Free Software *
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307*
+# * USA                                                                 *
+# *                                                                     *
+# ***********************************************************************
+
+
 import FreeCAD
 import Part
 import Draft
 import numpy as np
+import os
 
 if FreeCAD.GuiUp:
     import FreeCADGui, os
     from PySide import QtCore, QtGui
-    from DraftTools import translate
     from PySide.QtCore import QT_TRANSLATE_NOOP
 else:
     # \cond
@@ -26,18 +49,199 @@ except AttributeError:
 
 import threading
 import PVPlantResources
+import PVPlantSite
 
 
-def getTerrain():
-    for ob in FreeCAD.ActiveDocument.Objects:
-        if ob.Name[:4] == "Site":
-            return ob.Terrain
+def makePlacement():
+    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Placement")
+    _Placement(obj)
+    _ViewProviderPlacement(obj.ViewObject)
+    return obj
+
+class _Placement:
+    def __init__(self, obj):
+        self.setCommonProperties(obj)
+        self.obj = obj
+
+    def setCommonProperties(self, obj):
+        pl = obj.PropertiesList
+
+        if not ("NumberOfStrings" in pl):
+            obj.addProperty("App::PropertyInteger",
+                            "NumberOfStrings",
+                            "Setup",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).NumberOfStrings = 0
+            obj.setEditorMode("NumberOfStrings", 1)
+
+        self.Type = "StringSetup"
 
 
-def makeRectangleFromRack(rack):
-    pl = rack.Placement
-    pl.Base.z = 0
-    return Draft.makeRectangle(length=sel.Shape.BoundBox.XLength, height=sel.Shape.BoundBox.YLength, placement=pl)
+        '''
+        ['App::PropertyBool', 
+         'App::PropertyBoolList', 
+         'App::PropertyFloat', 
+         'App::PropertyFloatList',
+         'App::PropertyFloatConstraint', 
+         'App::PropertyPrecision', 
+         'App::PropertyQuantity',
+         'App::PropertyQuantityConstraint', 
+         'App::PropertyAngle', 
+         'App::PropertyDistance', 
+         'App::PropertyLength',
+         'App::PropertyArea', 
+         'App::PropertyVolume', 
+         'App::PropertyFrequency', 
+         'App::PropertySpeed',
+         'App::PropertyAcceleration', 
+         'App::PropertyForce', 
+         'App::PropertyPressure', 
+         'App::PropertyVacuumPermittivity',
+         'App::PropertyInteger', 
+         'App::PropertyIntegerConstraint', 
+         'App::PropertyPercent', 
+         'App::PropertyEnumeration',
+         'App::PropertyIntegerList', 
+         'App::PropertyIntegerSet', 
+         'App::PropertyMap', 
+         'App::PropertyString',
+         'App::PropertyPersistentObject', 
+         'App::PropertyUUID', 
+         'App::PropertyFont', 
+         'App::PropertyStringList',
+         'App::PropertyLink', 
+         'App::PropertyLinkChild', 
+         'App::PropertyLinkGlobal', 
+         'App::PropertyLinkHidden',
+         'App::PropertyLinkSub', 
+         'App::PropertyLinkSubChild',
+         'App::PropertyLinkSubGlobal',
+         'App::PropertyLinkSubHidden', 
+         'App::PropertyLinkList', 
+         'App::PropertyLinkListChild',
+         'App::PropertyLinkListGlobal', 
+         'App::PropertyLinkListHidden', 
+         'App::PropertyLinkSubList',
+         'App::PropertyLinkSubListChild', 
+         'App::PropertyLinkSubListGlobal', 
+         'App::PropertyLinkSubListHidden',
+         'App::PropertyXLink', 
+         'App::PropertyXLinkSub', 
+         'App::PropertyXLinkSubList', 
+         'App::PropertyXLinkList',
+         'App::PropertyMatrix', 
+         'App::PropertyVector', 
+         'App::PropertyVectorDistance', 
+         'App::PropertyPosition',
+         'App::PropertyDirection', 
+         'App::PropertyVectorList', 
+         'App::PropertyPlacement', 
+         'App::PropertyPlacementList',
+         'App::PropertyPlacementLink', 
+         'App::PropertyColor', 
+         'App::PropertyColorList', 
+         'App::PropertyMaterial',
+         'App::PropertyMaterialList', 
+         'App::PropertyPath', 
+         'App::PropertyFile', 
+         'App::PropertyFileIncluded',
+         'App::PropertyPythonObject',  
+         'App::PropertyExpressionEngine',  
+         'Part::PropertyPartShape',
+         'Part::PropertyGeometryList', 
+         'Part::PropertyShapeHistory', 
+         'Part::PropertyFilletEdges',
+         'Points::PropertyGreyValue', 
+         'Points::PropertyGreyValueList', 
+         'Points::PropertyNormalList',
+         'Points::PropertyCurvatureList', 
+         'Points::PropertyPointKernel', 
+         'Mesh::PropertyNormalList',
+         'Mesh::PropertyCurvatureList', 
+         'Mesh::PropertyMeshKernel']
+         '''
+
+    def addString(self, modulelist):
+        stringName = "String" + str(self.StringCount)
+        self.obj.addProperty("App::PropertyIntegerList",
+                             stringName,
+                             "Setup",
+                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                             )
+        setattr(self.obj, stringName, modulelist)
+        self.obj.NumberOfStrings = self.StringCount
+        self.StringCount += 1
+
+class _ViewProviderPlacement:
+    def __init__(self, vobj):
+        '''
+        Set view properties.
+        '''
+        self.Object = vobj.Object
+        vobj.Proxy = self
+
+    def attach(self, vobj):
+        '''
+        Create Object visuals in 3D view.
+        '''
+        self.Object = vobj.Object
+        return
+
+    def getIcon(self):
+        '''
+        Return object treeview icon.
+        '''
+
+        return str(os.path.join(DirIcons, "stringsetup.svg"))
+    '''
+    def claimChildren(self):
+        """
+        Provides object grouping
+        """
+        return self.Object.Group
+    '''
+
+    def setEdit(self, vobj, mode=0):
+        """
+        Enable edit
+        """
+        return True
+
+    def unsetEdit(self, vobj, mode=0):
+        """
+        Disable edit
+        """
+        return False
+
+    def doubleClicked(self, vobj):
+        """
+        Detect double click
+        """
+        pass
+
+    def setupContextMenu(self, obj, menu):
+        """
+        Context menu construction
+        """
+        pass
+
+    def edit(self):
+        """
+        Edit callback
+        """
+        pass
+
+    def __getstate__(self):
+        """
+        Save variables to file.
+        """
+        return None
+
+    def __setstate__(self,state):
+        """
+        Get variables from file.
+        """
+        return None
 
 
 def calculatePlacement(globalRotation, edge, offset, RefPt, xlate,
@@ -268,14 +472,12 @@ class _PVPlantPlacementTaskPanel:
         self.Rack = None
         self.PVArea = None
 
-        import os
-
         # self.form:
         self.form = FreeCADGui.PySideUic.loadUi(os.path.join(PVPlantResources.__dir__, "PVPlantPlacement.ui"))
         self.form.setWindowIcon(QtGui.QIcon(os.path.join(PVPlantResources.DirIcons, "way.svg")))
         self.form.editGapRows.setText("0.500 m")
         self.form.editGapCols.setText("5.000 m")
-        #self.form.editGapRows.textEdited.connect(lambda: self.updateRows(self.form.editGapRows, self.form.editGapRows.text()))
+        # self.form.editGapRows.textEdited.connect(lambda: self.updateRows(self.form.editGapRows, self.form.editGapRows.text()))
         self.form.editOffsetHorizontal.setText("0.0 m")
         self.form.editOffsetVertical.setText("0.0 m")
 
@@ -308,31 +510,53 @@ class _PVPlantPlacementTaskPanel:
             self.Rack = selection[0]
             self.form.editFrame.setText(self.Rack.Label)
 
+    def createFrameFromPoints(self, pl):
+        try:
+            MechanicalGroup = FreeCAD.ActiveDocument.Mechanical
+        except:
+            MechanicalGroup = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup", 'Mechanical')
+            MechanicalGroup.Label = "Mechanical"
+            FreeCAD.ActiveDocument.Site.addObject(MechanicalGroup)
+
+        for point in pl:
+            newrack = FreeCAD.ActiveDocument.copyObject(self.Rack)
+            newrack.Label = "Tracker"
+            newrack.Placement.rotate(newrack.Shape.BoundBox.Center, FreeCAD.Vector(0, 0, 1), -90)
+            newrack.Placement.Base = point
+            newrack.Visibility = True
+            MechanicalGroup.addObject(newrack)
+
+        # TODO: ajustar los tracker al terreno
+
     def calculateAlignedArray(self):
         from datetime import datetime
         starttime = datetime.now()
 
         gap_col = FreeCAD.Units.Quantity(self.form.editGapCols.text()).Value
-        gap_row = FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value + max(self.Rack.Shape.BoundBox.XLength, self.Rack.Shape.BoundBox.YLength)
+        gap_row = FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value + max(self.Rack.Shape.BoundBox.XLength,
+                                                                                   self.Rack.Shape.BoundBox.YLength)
         offset_x = FreeCAD.Units.Quantity(self.form.editOffsetHorizontal.text()).Value
         offset_y = FreeCAD.Units.Quantity(self.form.editOffsetVertical.text()).Value
-        Terrain = getTerrain().Shape
+        Terrain = PVPlantSite.get().Terrain.Shape
+
+        # TODO: Chequear la forma: Ver que esté cerrada y transformarla en cara.
         Area = self.PVArea.Shape
 
         rec = Part.makePlane(self.Rack.Shape.BoundBox.YLength, self.Rack.Shape.BoundBox.XLength)
-
         # TODO: revisar todo esto: -----------------------------------------------------------------
         sel = FreeCADGui.Selection.getSelectionEx()[0]
         refh = None
         refv = None
 
         if len(sel.SubObjects) == 0:
-            return 0
+            return
 
         if len(sel.SubObjects) == 1:
+            # Todo: chequear que sea un edge. Si es otra cosa coger el edge[0] de la forma
             refh = refv = sel.SubObjects[0]
 
-        if len(sel.SubObjects) == 2:
+        if len(sel.SubObjects) > 1:
+            # Todo: chequear que sea un edge. Si es otra cosa coger el edge[0] de la forma
             if sel.SubObjects[0].BoundBox.XLength > sel.SubObjects[1].BoundBox.XLength:
                 refh = sel.SubObjects[0]
             else:
@@ -345,18 +569,17 @@ class _PVPlantPlacementTaskPanel:
 
         steps = int((refv.BoundBox.XMax - Area.BoundBox.XMin + offset_x) / gap_col)
         startx = refv.BoundBox.XMax + offset_x - gap_col * steps
-
+        steps = int((refh.BoundBox.YMin - Area.BoundBox.YMax + offset_y) / gap_row)
+        starty = refh.BoundBox.YMin + offset_y + gap_row * steps
         # todo end ----------------------------------------------------------------------------------
 
-
-        start = FreeCAD.Vector(startx, refh.BoundBox.YMin, 0.0)
-        pointsx = np.arange(start.x, Terrain.BoundBox.XMax, gap_col)
-        pointsy = np.arange(start.y, Terrain.BoundBox.YMin, -gap_row)
+        pointsx = np.arange(startx, Terrain.BoundBox.XMax, gap_col)
+        pointsy = np.arange(starty, Terrain.BoundBox.YMin, -gap_row)
 
         pl = []
-        for y in pointsy:
-            for x in pointsx:
-                point = FreeCAD.Vector(x, y - rec.BoundBox.YLength, .0)
+        for x in pointsx:
+            for y in pointsy:
+                point = FreeCAD.Vector(x, y - rec.BoundBox.YLength, 0.0)
                 if Area.isInside(point, 0.1, True):
                     cp = rec.copy()
                     cp.Placement.Base = point
@@ -365,19 +588,11 @@ class _PVPlantPlacementTaskPanel:
                         pl.append(cp.BoundBox.Center)
                         Part.show(cp)
 
-
-        for point in pl:
-            newrack = FreeCAD.ActiveDocument.copyObject(self.Rack)
-            newrack.Label = "Tracker"
-            newrack.Placement.rotate(newrack.Shape.BoundBox.Center, FreeCAD.Vector(0, 0, 1), -90)
-            newrack.Placement.Base = point
-            newrack.Visibility = True
-
-        #TODO: ajustar los tracker al terreno
-
         total_time = datetime.now() - starttime
         print(" -- Tiempo tardado:", total_time)
         print("    --  Trackers creados: ", len(pl), ", tiempo por tracker: ", total_time / len(pl))
+
+        return pl
 
     def calculateNonAlignedArray(self):
         from datetime import datetime
@@ -388,7 +603,7 @@ class _PVPlantPlacementTaskPanel:
                                                                                    self.Rack.Shape.BoundBox.YLength)
         offset_x = FreeCAD.Units.Quantity(self.form.editOffsetHorizontal.text()).Value
         offset_y = FreeCAD.Units.Quantity(self.form.editOffsetVertical.text()).Value
-        Terrain = getTerrain().Shape
+        Terrain = PVPlantSite.get().Terrain.Shape
         Area = self.PVArea.Shape
 
         rec = Part.makePlane(self.Rack.Shape.BoundBox.YLength, self.Rack.Shape.BoundBox.XLength)
@@ -399,7 +614,7 @@ class _PVPlantPlacementTaskPanel:
         refv = None
 
         if len(sel.SubObjects) == 0:
-            return 0
+            refh = refv = Area.Edges[0]
 
         if len(sel.SubObjects) == 1:
             refh = refv = sel.SubObjects[0]
@@ -423,811 +638,54 @@ class _PVPlantPlacementTaskPanel:
         start = FreeCAD.Vector(startx, 0.0, 0.0)
         pointsx = np.arange(start.x, Terrain.BoundBox.XMax, gap_col)
 
-
-        def getSection(line):
-            inter = Area.section([line])
-            pts = [ver.Point for ver in inter.Vertexes] #todo: sort points
-            for i in range(0, len(pts), 2):
-                line = Part.LineSegment(pts[i], pts[i + 1])
-                if line.length() >= rec.BoundBox.YLength:
-                    cnt = int(line.length() / (rec.BoundBox.YLength + gap_row))
-                    pointsy = np.arange(pts[i].y - rec.BoundBox.YLength, pts[i + 1].y, -gap_row)
-                    for point in pointsy:
-                        cp = rec.copy()
-                        cp.Placement.Base = FreeCAD.Vector(pts[i].x - rec.BoundBox.XLength / 2, point, 0.0) #- FreeCAD.Vector(rec.BoundBox.XLength / 2, rec.BoundBox.YLength, 0.0)
-                        cut = cp.cut([Area])
-                        #if cut.Area == 0:
-                        #    pl.append(cp.BoundBox.Center)
-                        Part.show(cp)
-                    Part.show(line.toShape())
-
-        lines = []
+        pl = []
         for point in pointsx:
             p1 = FreeCAD.Vector(point, Area.BoundBox.YMax, 0.0)
             p2 = FreeCAD.Vector(point, Area.BoundBox.YMin, 0.0)
             line = Part.makePolygon([p1, p2])
-            #getSection(line)
 
-
-            p1 = FreeCAD.Vector(point - rec.BoundBox.XLength / 2, Area.BoundBox.YMax, 0.0)
-            p2 = FreeCAD.Vector(point - rec.BoundBox.XLength / 2, Area.BoundBox.YMin, 0.0)
-            line_l = Part.makePolygon([p1, p2])
-
-            p1 = FreeCAD.Vector(point + rec.BoundBox.XLength / 2, Area.BoundBox.YMax, 0.0)
-            p2 = FreeCAD.Vector(point + rec.BoundBox.XLength / 2, Area.BoundBox.YMin, 0.0)
-            line_r = Part.makePolygon([p1, p2])
-
-            Part.show(line_l)
-            Part.show(line_r)
-
-
-        '''
-        for line in lines:
             inter = Area.section([line])
-            pts = [ver.Point for ver in inter.Vertexes]
+            pts = [ver.Point for ver in inter.Vertexes]  # todo: sort points
             for i in range(0, len(pts), 2):
-                line = Part.LineSegment(pts[i+1], pts[i])
+                line = Part.LineSegment(pts[i], pts[i + 1])
                 if line.length() >= rec.BoundBox.YLength:
-                    Part.show(line.toShape())
-        '''
-
-        '''
-        for point in pl:
-            newrack = FreeCAD.ActiveDocument.copyObject(self.Rack)
-            newrack.Label = "Tracker"
-            newrack.Placement.rotate(newrack.Shape.BoundBox.Center, FreeCAD.Vector(0, 0, 1), -90)
-            newrack.Placement.Base = point
-            newrack.Visibility = True
-        '''
+                    y1 = pts[i].y - rec.BoundBox.YLength
+                    cp = rec.copy()
+                    cp.Placement.Base = FreeCAD.Vector(pts[i].x - rec.BoundBox.XLength / 2, y1, 0.0)
+                    inter = cp.cut([Area])
+                    y1 = min([ver.Point.y for ver in inter.Vertexes])
+                    pointsy = np.arange(y1, pts[i + 1].y, -gap_row)
+                    for point in pointsy:
+                        cp = rec.copy()
+                        cp.Placement.Base = FreeCAD.Vector(pts[i].x - rec.BoundBox.XLength / 2, point, 0.0)
+                        cut = cp.cut([Area])
+                        if cut.Area == 0:
+                            Part.show(cp)
+                            pl.append(point)
 
         total_time = datetime.now() - starttime
         print(" -- Tiempo tardado:", total_time)
-        #print("    --  Trackers creados: ", len(pl), ", tiempo por tracker: ", total_time / len(pl))
+        # print("    --  Trackers creados: ", len(pl), ", tiempo por tracker: ", total_time / len(pl))
+
+        return pl
 
     def accept(self):
         if self.Terrain is None:
-            self.Terrain = getTerrain()
+            self.Terrain = PVPlantSite.get().Terrain.Shape
+
 
         if self.form.cbAlignFrames.isChecked():
-            self.calculateAlignedArray()
-            return True
+            placements = self.calculateAlignedArray()
         else:
-            self.calculateNonAlignedArray()
-            return True
+            placements = self.calculateNonAlignedArray()
 
+        #self.createFrameFromPoints(placements)
 
-        if self.Terrain is not None and self.Rack is not None and self.PVArea is not None:
-            if True:  # sin hilos
-                placement3D_v1(Terrain=self.Terrain,
-                               Rack=self.Rack,
-                               PVArea=self.PVArea,
-                               ColSpacing=FreeCAD.Units.Quantity(self.form.editGapCols.text()).Value,
-                               RowSpacing=FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value,
-                               Orientation=self.form.comboOrientation.currentIndex(),
-                               DirH=self.form.comboDirH.currentIndex(),
-                               DirV=self.form.comboDirV.currentIndex(),
-                               OffsetX=FreeCAD.Units.Quantity(self.form.editOffsetHorizontal.text()).Value,
-                               OffsetY=FreeCAD.Units.Quantity(self.form.editOffsetVertical.text()).Value)
-
-            else:  # con hilos
-                import threading
-                hilo = threading.Thread(target=placement3D, args=(self.Terrain.Mesh,
-                                                                  self.Rack,
-                                                                  self.PVArea,
-                                                                  FreeCAD.Units.Quantity(
-                                                                      self.form.editGapCols.text()).Value,
-                                                                  FreeCAD.Units.Quantity(
-                                                                      self.form.editGapcols.text()).Value,
-                                                                  self.form.comboOrientation.currentIndex(),
-                                                                  FreeCAD.Units.Quantity(
-                                                                      self.form.editOffsetHorizontal.text()).Value,
-                                                                  FreeCAD.Units.Quantity(
-                                                                      self.form.editOffsetHorizontal.text()).Value))
-                hilo.start()
-
+        FreeCADGui.Control.closeDialog()
         return True
 
 
-## TODO: multiprocessionado
-# import multiprocessing as mp
-# pool = mp.Pool(mp.cpu_count())
-# pool.apply_async(función, args=(argumento1, argumento2 ...), callback = callback)
-# pool.close()
-# pool.join()
 
-def placement3D(Mesh, Rack, PVArea, ColSpacing, colSpacing, Orientation, DirH=0, DirV=0, OffsetX=0, OffsetY=0):
-    ## Info: ----------------------------------------------------------------------------------------------------------
-    # 1. Orientation (Orientación de la estructura):
-    #    -- 0 => Norte-Sur
-    #    -- 1 => Este-Oeste
-    # 2. DirH (Dirección Horizontal):
-    #    -- 0: Izquierda
-    #    -- 1: Derecha
-    #    -- 2: Centro
-    # 3. DirV (Dirección Vertical):
-    #    -- 0: Arriba
-    #    -- 1: Abajo
-    #    -- 2: Centro
-    ## ----------------------------------------------------------------------------------------------------------------
-
-    # Debug: --------------------
-    method = False
-    # Debug fin -----------------
-
-    from scipy.spatial import distance
-    import math
-    import PVPlantUtils
-    import DraftGeomUtils, Part
-    import MeshPart as mp
-
-    NOrientation = 1 - Orientation
-    PVArea2D = Draft.makeShape2DView(PVArea, FreeCAD.Vector(0, 0, 1))
-    FreeCAD.activeDocument().recompute()
-    DistCols = ColSpacing + (Rack.Shape.BoundBox.XLength if Orientation == 1 else Rack.Shape.BoundBox.YLength)
-
-    paths = []
-    inc = (PVArea.Shape.BoundBox.XMin + Rack.Shape.BoundBox.YLength / 2 + OffsetX) if Orientation == 0 else (
-            PVArea.Shape.BoundBox.YMin + Rack.Shape.BoundBox.XLength / 2 + OffsetY)
-    vecB = (float(1 * NOrientation), float(1 * Orientation), 0.0)
-    stop = PVArea.Shape.BoundBox.XMax if Orientation == 0 else PVArea.Shape.BoundBox.YMax  ## original
-    count = 0
-    while inc < stop:
-        vecA = (float(inc * NOrientation), float(inc * Orientation), 0.0)
-
-        ## 25/12/2020  Idea: ------------------------------------------------------------------------------------------------------
-        ## TODO: hacer intersecar un plano con el PVArea2D para sacar el path y proyectar al terreno
-        line1 = Part.LineSegment(FreeCAD.Vector(inc, PVArea2D.Shape.BoundBox.YMin - 10000, 0),
-                                 FreeCAD.Vector(inc, PVArea2D.Shape.BoundBox.YMax + 10000, 0)).toShape()
-
-        if method:  ## TODO: Revisar qué metodo e mejor
-            inter = PVArea2D.Shape.section(line1)
-            FreeCAD.activeDocument().recompute()
-            if len(inter.Vertexes) > 1:
-                lis = []
-                for vertex in inter.Vertexes:
-                    lis.append(vertex.Point)
-                # lis = list(dict.fromkeys(lis))
-                lis = [ii for n, ii in enumerate(lis) if ii not in lis[:n]]
-
-                for i in range(0, len(inter.Vertexes), 2):
-                    try:
-                        import MeshPart as mp
-                        edge = Part.LineSegment(inter.Vertexes[i].Point, inter.Vertexes[i + 1].Point).toShape()
-                        if edge.Length >= Rack.Shape.BoundBox.XLength:
-                            plist = mp.projectShapeOnMesh(edge, Mesh, FreeCAD.Vector(0, 0, 1))
-                            PointList = []
-                            for pl in plist:
-                                PointList += pl
-                            PointList = sorted(PointList, key=lambda k: (k[NOrientation], k[Orientation], k[2]),
-                                               reverse=True)
-
-                            path = Draft.makeWire(PointList, closed=False, face=None, support=None)
-                            # path.MakeFace = False
-                            path.Label = "col(" + str(count) + ")"
-                            paths.append(path)
-                        del edge
-                    except:
-                        print("Error: ", len(inter.Vertexes), " ---  ", lis)
-                        pass
-
-            '''
-            # distToShape: más lento.
-            distance, solutions, support = PVArea2D.Shape.distToShape(line1) 
-            if len(solutions) > 1:
-                try:
-                    for i in range(0, len(solutions), 2):
-                        if(solutions[i][0] != solutions[i+1][0]):
-                            edge = Part.LineSegment(solutions[i][0], solutions[i+1][0]).toShape()
-                            if edge.Length >= Rack.Shape.BoundBox.XLength:
-                                #print("Dentro: ", edge.Length)
-                                #Part.show(edge)
-
-                                plist = mp.projectShapeOnMesh(edge, Mesh, FreeCAD.Vector(0, 0, 1))
-                                PointList = []
-                                for pl in plist:
-                                    PointList += pl
-                                PointList = sorted(PointList, key=lambda k: (k[NOrientation], k[Orientation], k[2]), reverse=True)
-
-                                path = Draft.makeWire(PointList, closed=False, face=None, support=None)
-                                path.MakeFace = False
-                                path.Label = "col(" + str(count) + ")"
-                                paths.append(path)
-                            del edge
-                except:
-                    print("   ------------- Error: ", solutions[i][0], solutions[i+1][0])
-                    pass
-            '''
-        else:
-            CrossSections = Mesh.crossSections([(vecA, vecB)], 0.000001)
-            for PointList in CrossSections[0]:
-                if len(PointList) > 1:
-                    #  Sort points:
-                    PointList = sorted(PointList, key=lambda k: (k[NOrientation], k[Orientation], k[2]), reverse=True)
-
-                    # Chequear si los puntos están dentro del BoundBox
-                    pl = []
-                    if Orientation == 0:
-                        for point in PointList:
-                            if PVArea.Shape.BoundBox.YMin <= point.y <= PVArea.Shape.BoundBox.YMax:
-                                pl.append(point)
-                        # if len(pl) > 0:
-                        #    pl[0].y = PVArea.Shape.BoundBox.YMax
-                    else:
-                        for point in PointList:
-                            if PVArea.Shape.BoundBox.XMin <= point.x <= PVArea.Shape.BoundBox.XMax:
-                                pl.append(point)
-                        # if len(pl) > 0:
-                        #    pl[0].x = PVArea.Shape.BoundBox.XMax
-
-                    del PointList
-                    PointList = pl
-                    del pl
-
-                    # 1. Smooth the points?
-
-                    # 2. Make the path
-                    if len(PointList) > 1:
-                        path = Draft.makeWire(PointList, closed=False, face=None, support=None)
-                        path.MakeFace = False
-                        path.Label = "col(" + str(count) + ")"
-                        paths.append(path)
-
-                    del PointList
-                    del path
-
-        inc += DistCols
-        count += 1
-
-    FreeCAD.activeDocument().recompute()
-
-    for path in paths:
-        # Posicionar las estructuras en la línea:
-        rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90 * NOrientation)
-        transself.formationVector = FreeCAD.Vector(0, 0, 0)
-
-        placements = calculatePlacementsOnPath(rotation, path,
-                                               transself.formationVector,
-                                               Rack.Shape.BoundBox.XLength,
-                                               ColSpacing if Orientation == 1 else colSpacing,
-                                               Orientation, OffsetY)
-
-        calculateSections(Rack, placements)
-        del placements
-
-    del paths
-    FreeCAD.activeDocument().recompute()
-
-
-def placement3D_v1(Terrain, Rack, PVArea, ColSpacing, RowSpacing, Orientation, DirH=0, DirV=0, OffsetX=0, OffsetY=0):
-    ## Info: ----------------------------------------------------------------------------------------------------------
-    # 1. Orientation (Orientación de la estructura):
-    #    -- 0 => Norte-Sur
-    #    -- 1 => Este-Oeste
-    # 2. DirH (Dirección Horizontal):
-    #    -- 0: Izquierda
-    #    -- 1: Derecha
-    #    -- 2: Centro
-    # 3. DirV (Dirección Vertical):
-    #    -- 0: Arriba
-    #    -- 1: Abajo
-    #    -- 2: Centro
-    ## ----------------------------------------------------------------------------------------------------------------
-
-    # Debug: --------------------
-    method = True
-    # Debug fin -----------------
-
-    import DraftGeomUtils, Part
-
-    NOrientation = 1 - Orientation
-    DistCols = ColSpacing + (Rack.Shape.BoundBox.XLength if Orientation == 1 else Rack.Shape.BoundBox.YLength)
-    PVArea2D = Draft.makeShape2DView(PVArea, FreeCAD.Vector(0, 0, 1))
-
-    paths = []
-    vecB = (float(1 * NOrientation), float(1 * Orientation), 0.0)
-    count = 0
-
-    if Orientation == 0:  # orientación Norte - Sur
-        ord = False
-        if DirV == 1:
-            ord = True
-
-        if DirH == 0:  # Dirección izquierda - derecha
-            inc = (PVArea.Shape.BoundBox.XMin + Rack.Shape.BoundBox.YLength / 2 + OffsetX)
-            stop = PVArea.Shape.BoundBox.XMax
-
-            while inc < stop:
-                ## 25/12/2020  Idea: ------------------------------------------------------------------------------------------------------
-                ## TODO: hacer intersecar un plano con el PVArea2D para sacar el path y proyectar al terreno
-
-                if method:  ## TODO: Revisar qué metodo e mejor
-                    print("Nuevo método ------------------------------------------------------------------")
-                    FreeCAD.activeDocument().recompute()
-                    line1 = Part.LineSegment(FreeCAD.Vector(inc, PVArea2D.Shape.BoundBox.YMin - 1000, 0),
-                                             FreeCAD.Vector(inc, PVArea2D.Shape.BoundBox.YMax + 1000, 0)).toShape()
-                    inter = PVArea2D.Shape.section(line1)
-
-                    if len(inter.Vertexes) > 1:
-                        lis = [vertex.Point for vertex in inter.Vertexes]
-                        # remove dublicated points ??:
-                        lis = [ii for n, ii in enumerate(lis) if ii not in lis[:n]]
-
-                        for i in range(0, len(inter.Vertexes), 2):
-                            try:
-                                import MeshPart as mp
-                                edge = Part.LineSegment(inter.Vertexes[i].Point, inter.Vertexes[i + 1].Point).toShape()
-                                if edge.Length >= Rack.Shape.BoundBox.XLength:
-                                    plist = mp.projectShapeOnMesh(edge, Mesh, FreeCAD.Vector(0, 0, 1))
-                                    PointList = []
-                                    for pl in plist:
-                                        PointList += pl
-                                    PointList = sorted(PointList, key=lambda k: (k[NOrientation], k[Orientation], k[2]),
-                                                       reverse=True)
-
-                                    path = Draft.makeWire(PointList, closed=False, face=None, support=None)
-                                    # path.MakeFace = False
-                                    path.Label = "col(" + str(count) + ")"
-                                    paths.append(path)
-                                    count += 1
-                                del edge
-                            except:
-                                print("Error: ", len(inter.Vertexes), " ---  ", lis)
-                                pass
-                    inc += DistCols
-                else:
-                    vecA = (float(inc), 0.0, 0.0)
-                    CrossSections = Mesh.crossSections([(vecA, vecB)], 0.000001)
-                    for PointList in CrossSections[0]:
-                        if len(PointList) > 1:
-                            #  Sort points:
-                            PointList = sorted(PointList, key=lambda k: (k[1], k[0], k[2]), reverse=ord)
-
-                            # Chequear si los puntos están dentro del BoundBox
-                            pl = []
-                            for point in PointList:
-                                if PVArea.Shape.BoundBox.YMin <= point.y <= PVArea.Shape.BoundBox.YMax:
-                                    pl.append(point)
-
-                            del PointList
-                            PointList = pl
-                            del pl
-
-                            # 2. Make the path
-                            if len(PointList) > 1:
-                                path = Draft.makeWire(PointList, closed=False, face=None, support=None)
-                                path.MakeFace = False
-                                path.Label = "col(" + str(count) + ")"
-                                paths.append(path)
-                                count += 1
-
-                            del PointList
-                            del path
-                    inc += DistCols
-
-        elif DirH == 1:  # Dirección derecha - izquierda
-            inc = PVArea.Shape.BoundBox.XMax - Rack.Shape.BoundBox.YLength / 2 - OffsetX
-            stop = PVArea.Shape.BoundBox.XMin
-
-            while inc > stop:
-                vecA = (float(inc), 0.0, 0.0)
-                CrossSections = Mesh.crossSections([(vecA, vecB)], 0.000001)
-                for PointList in CrossSections[0]:
-                    if len(PointList) > 1:
-                        #  Sort points:
-                        PointList = sorted(PointList, key=lambda k: (k[1], k[0], k[2]), reverse=ord)
-
-                        # Chequear si los puntos están dentro del BoundBox
-                        pl = []
-                        for point in PointList:
-                            if PVArea.Shape.BoundBox.YMin <= point.y <= PVArea.Shape.BoundBox.YMax:
-                                pl.append(point)
-
-                        del PointList
-                        PointList = pl
-                        del pl
-
-                        # 2. Make the path
-                        if len(PointList) > 1:
-                            path = Draft.makeWire(PointList, closed=False, face=None, support=None)
-                            path.MakeFace = False
-                            path.Label = "col(" + str(count) + ")"
-                            paths.append(path)
-                            count += 1
-
-                        del PointList
-                        del path
-                inc -= DistCols
-    else:
-        inc = (PVArea.Shape.BoundBox.XMin + Rack.Shape.BoundBox.YLength / 2 + OffsetX) if Orientation == 0 else (
-                PVArea.Shape.BoundBox.YMin + Rack.Shape.BoundBox.XLength / 2 + OffsetY)
-        stop = PVArea.Shape.BoundBox.XMax if Orientation == 0 else PVArea.Shape.BoundBox.YMax
-
-        while inc < stop:
-            vecA = (float(inc * NOrientation), float(inc * Orientation), 0.0)
-
-            # line1 = Part.LineSegment(FreeCAD.Vector(inc, PVArea2D.Shape.BoundBox.YMin - 10000, 0),
-            #                         FreeCAD.Vector(inc, PVArea2D.Shape.BoundBox.YMax + 10000, 0)).toShape()
-
-            CrossSections = Mesh.crossSections([(vecA, vecB)], 0.000001)
-            for PointList in CrossSections[0]:
-                if len(PointList) > 1:
-                    #  Sort points:
-                    PointList = sorted(PointList, key=lambda k: (k[NOrientation], k[Orientation], k[2]), reverse=True)
-
-                    # Chequear si los puntos están dentro del BoundBox
-                    pl = []
-                    if Orientation == 0:
-                        for point in PointList:
-                            if PVArea.Shape.BoundBox.YMin <= point.y <= PVArea.Shape.BoundBox.YMax:
-                                pl.append(point)
-                        if len(pl) > 0:
-                            pl[0].y = PVArea.Shape.BoundBox.YMax
-                    else:
-                        for point in PointList:
-                            if PVArea.Shape.BoundBox.XMin <= point.x <= PVArea.Shape.BoundBox.XMax:
-                                pl.append(point)
-                            if len(pl) > 0:
-                                pl[0].x = PVArea.Shape.BoundBox.XMax
-
-                    PointList = pl
-                    del pl
-
-                    # 1. Smooth the points?
-
-                    # 2. Make the path
-                    if len(PointList) > 1:
-                        path = Draft.makeWire(PointList, closed=False, face=None, support=None)
-                        path.MakeFace = False
-                        path.Name = "col(" + str(count) + ")"
-                        path.Label = path.Name
-                        paths.append(path)
-
-                    del PointList
-                    del path
-
-            inc += DistCols
-
-    FreeCAD.activeDocument().recompute()
-
-    pts = []
-    for path in paths:
-        # Posicionar las estructuras en la línea:
-        rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), -90 * NOrientation)
-        formationVector = FreeCAD.Vector(0, 0, 0)
-
-        placements, pts = calculatePlacementsOnPath(rotation, path,
-                                                    formationVector,
-                                                    Rack.Shape.BoundBox.XLength,
-                                                    ColSpacing if Orientation == 1 else colSpacing,
-                                                    Orientation, OffsetY)
-
-        calculateSections(Rack, placements)
-        del placements
-
-    del paths
-    FreeCAD.activeDocument().recompute()
-
-def placement2D_3D(Terrain, Rack, PVArea, ColSpacing, colSpacing, Orientation, DirH=0, DirV=0, OffsetX=0, OffsetY=0):
-    ## Info: ----------------------------------------------------------------------------------------------------------
-    # 1. Orientation (Orientación de la estructura):
-    #    -- 0 => Norte-Sur
-    #    -- 1 => Este-Oeste
-    # 2. DirH (Dirección Horizontal):
-    #    -- 0: Izquierda
-    #    -- 1: Derecha
-    #    -- 2: Centro
-    # 3. DirV (Dirección Vertical):
-    #    -- 0: Arriba
-    #    -- 1: Abajo
-    #    -- 2: Centro
-    ## ----------------------------------------------------------------------------------------------------------------
-
-    NOrientation = 1 - Orientation
-    DistCols = ColSpacing + (Rack.Shape.BoundBox.XLength if Orientation == 1 else Rack.Shape.BoundBox.YLength)
-    frameFootprint = makeRectangleFromRack(Rack)
-    # Make sure PVArea is 2D:
-    PVArea2D = Draft.makeShape2DView(PVArea, FreeCAD.Vector(0, 0, 1))
-
-    if Orientation == 0:
-        aux = frameFootprint.Length
-        frameFootprint.Length = frameFootprint.Height
-        frameFootprint.Height = aux
-        del aux
-
-    frameFootprint.Placement.Base.x = Terrain.Shape.BoundBox.XMin
-    frameFootprint.Placement.Base.y = Terrain.Shape.BoundBox.YMin
-    Distcols = frameFootprint.Height.Value + colSpacing
-
-    if Orientation == 0:
-        rec = Draft.makeRectangle(length=Rack.Width, height=Terrain.Shape.BoundBox.YLength, face=True, support=None)
-        rec.Placement.Base.x = Terrain.Shape.BoundBox.XMin + Rack.Width / 2 + OffsetX
-        rec.Placement.Base.y = Terrain.Shape.BoundBox.YMin
-    else:
-        rec = Draft.makeRectangle(length=Terrain.Shape.BoundBox.XLength, height=Rack.Height, face=True, support=None)
-        rec.Placement.Base.x = Terrain.Shape.BoundBox.XMin
-        rec.Placement.Base.y = Terrain.Shape.BoundBox.YMin
-
-    while rec.Shape.BoundBox.XMax <= Terrain.Shape.BoundBox.XMax:
-        common = Terrain.Shape.common(rec.Shape)
-        for shape in common.Faces:
-            if shape.Area >= frameFootprint.Shape.Area:
-                frameFootprint.Placement.Base.x = shape.BoundBox.XMin
-                frameFootprint.Placement.Base.y = shape.BoundBox.YMin
-
-                while (frameFootprint.Shape.BoundBox.XMax <= shape.BoundBox.XMax):
-                    common1 = shape.common(frameFootprint.Shape)
-                    if common1.Area >= 0:
-                        raise
-                    else:
-                        # ajuste fino hasta encontrar el primer sitio:
-                        frameFootprint.Placement.Base.x += 500  # un metro
-                    del common1
-
-        # ajuste fino hasta encontrar el primer sitio:
-        rec.Placement.Base.y += 100
-        del common
-
-    FreeCAD.ActiveDocument.removeObject(rec.Name)
-
-    from datetime import datetime
-    starttime = datetime.now()
-
-    if Orientation == 0:
-        # Código para crear Columnas:
-        while Rack.Placement.Base.x > Terrain.Shape.BoundBox.XMin:
-            Rack.Placement.Base.x -= DistCols
-    else:
-        # Código para crear Filas:
-        Rack.Placement.Base.x = Terrain.Shape.BoundBox.XMin
-        i = 1
-        yy = Rack.Placement.Base.y
-        while yy < Terrain.Shape.BoundBox.YMax:
-            Createcol1(Rack.Placement.Base.x, yy, Rack, Terrain, DistCols, area, i)
-            i += 1
-            yy += Distcols
-
-    FreeCAD.activeDocument().recompute()
-    print("Placing OK (", datetime.now() - starttime, ")")
-
-def placement2D(self):
-    if valueTypeStructure.currentIndex() == 0:  # Fixed
-        print("Rack")
-    else:
-        print("Tracker")
-        if Rack.Height < Rack.Length:
-            print("rotar")
-            aux = Rack.Length
-            Rack.Length = Rack.Height
-            Rack.Height = aux
-
-    Rack.Placement.Base.x = Terrain.Shape.BoundBox.XMin
-    Rack.Placement.Base.y = Terrain.Shape.BoundBox.YMin
-
-    DistColls = Rack.Length.Value + ColSpacing
-    Distcols = Rack.Height.Value + colSpacing
-    area = Rack.Shape.Faces[0].Area  # * 0.999999999
-
-    rec = Draft.makeRectangle(length=Terrain.Shape.BoundBox.XLength, height=Rack.Height, face=True,
-                              support=None)
-    rec.Placement.Base.x = Terrain.Shape.BoundBox.XMin
-    rec.Placement.Base.y = Terrain.Shape.BoundBox.YMin
-
-    try:
-        while rec.Shape.BoundBox.YMax <= Terrain.Shape.BoundBox.YMax:
-            common = Terrain.Shape.common(rec.Shape)
-            for shape in common.Faces:
-                if shape.Area >= area:
-                    if False:
-                        minorPoint = FreeCAD.Vector(0, 0, 0)
-                        for spoint in shape.OuterWire.Vertexes:
-                            if minorPoint.y >= spoint.Point.y:
-                                if minorPoint.x >= spoint.x:
-                                    minorPoint = spoint
-                                    Rack.Placement.Base = spoint
-                    else:
-                        # más rápido
-                        Rack.Placement.Base.x = shape.BoundBox.XMin
-                        Rack.Placement.Base.y = shape.BoundBox.YMin
-
-                    while (Rack.Shape.BoundBox.XMax <= shape.BoundBox.XMax):
-                        if checkInside(Rack, shape):
-                            raise
-                        else:
-                            # ajuste fino hasta encontrar el primer sitio:
-                            rackClone.Placement.Base.x += 500  # medio metro
-
-                        '''old version 1
-                        # Chequear si está dentro: --------------------------------------------------------
-                        verts = [v.Point for v in rackClone.Shape.OuterWire.OrderedVertexes]
-                        inside = True
-                        for vert in verts:
-                            if not shape.isInside(vert, 0, True):
-                                inside = False
-                                break
-                        # Chequear si está dentro fin --------------------------------------------------------
-
-                        if inside:
-                            raise
-                        else:
-                            # ajuste fino hasta encontrar el primer sitio:
-                            rackClone.Placement.Base.x += 500  # medio metro
-                        '''
-
-                        '''old version 0
-                        common1 = shape.common(Rack.Shape)
-                        if common1.Area >= area:
-                            raise
-                        else:
-                            # ajuste fino hasta encontrar el primer sitio:
-                            Rack.Placement.Base.x += 500  # un metro
-                        del common1
-                        '''
-            # ajuste fino hasta encontrar el primer sitio:
-            rec.Placement.Base.y += 100
-            del common
-    except:
-        pass
-        # print("Found")
-
-    FreeCAD.ActiveDocument.removeObject(rec.Name)
-
-    from datetime import datetime
-    starttime = datetime.now()
-
-    if valueOrientation.currentIndex() == 0:
-        # Código para crear filas:
-        Rack.Placement.Base.x = Terrain.Shape.BoundBox.XMin
-        i = 1
-        yy = Rack.Placement.Base.y
-        while yy < Terrain.Shape.BoundBox.YMax:
-            Createcol1(Rack.Placement.Base.x, yy, Rack, Terrain, DistColls, area, i)
-            i += 1
-            yy += Distcols
-    elif valueOrientation.currentIndex() == 2:
-        # Código para crear columnas:
-        while Rack.Placement.Base.x > Terrain.Shape.BoundBox.XMin:
-            Rack.Placement.Base.x -= DistColls
-    else:
-        xx = Rack.Placement.Base.x
-        while xx < Terrain.Shape.BoundBox.XMax:
-            CreateGrid(xx, Rack.Placement.Base.y, Rack, Terrain, Distcols, area)
-            xx += DistColls
-
-    FreeCAD.activeDocument().recompute()
-    print("Everything OK (", datetime.now() - starttime, ")")
-
-def checkInside(obj, area):
-    verts = [v.Point for v in obj.Shape.OuterWire.OrderedVertexes]
-    inside = True
-    for vert in verts:
-        if not area.isInside(vert, 0, True):
-            inside = False
-            break
-    return inside
-
-# Alinear solo filas. las columnas donde se pueda
-def Createcol(XX, YY, rack, land, ColSpacing, area, colNumber):
-    rackClone = Draft.makeRectangle(length=rack.Length, height=rack.Height, face=True, support=None)
-    rackClone.Label = 'rackClone{a}'.self.format(a=colNumber)
-    rackClone.Placement.Base.x = XX
-    rackClone.Placement.Base.y = YY
-
-    rec = Draft.makeRectangle(length=land.Shape.BoundBox.XLength, height=rack.Height, face=True, support=None)
-    rec.Placement.Base.x = land.Shape.BoundBox.XMin
-    rec.Placement.Base.y = YY
-    FreeCAD.activeDocument().recompute()
-
-    common = land.Shape.common(rec.Shape)
-    for shape in common.Faces:
-        if shape.Area >= area:
-            rackClone.Placement.Base.x = shape.BoundBox.XMin
-            rackClone.Placement.Base.y = shape.BoundBox.YMin
-            while rackClone.Shape.BoundBox.XMax <= shape.BoundBox.XMax:
-                common1 = shape.common(rackClone.Shape)
-                if common1.Area >= area:
-                    tmp = Draft.makeRectangle(length=rack.Length, height=rack.Height, placement=rackClone.Placement,
-                                              face=True, support=None)
-                    tmp.Label = 'R{:03}-000'.self.format(colNumber)
-                    rackClone.Placement.Base.x += ColSpacing
-                else:
-                    # ajuste fino hasta encontrar el primer sitio:
-                    rackClone.Placement.Base.x += 500  # un metro
-                del common1
-    del common
-    FreeCAD.ActiveDocument.removeObject(rackClone.Name)
-    FreeCAD.ActiveDocument.removeObject(rec.Name)
-
-# Alinear solo filas. las columnas donde se pueda
-def Createcol1(XX, YY, rack, land, ColSpacing, area, colNumber):
-    rackClone = Draft.makeRectangle(length=rack.Length, height=rack.Height, face=True, support=None)
-    rackClone.Label = 'rackClone{a}'.self.format(a=colNumber)
-    rackClone.Placement.Base.x = XX
-    rackClone.Placement.Base.y = YY
-
-    rec = Draft.makeRectangle(length=land.Shape.BoundBox.XLength, height=rack.Height, face=True, support=None)
-    rec.Placement.Base.x = land.Shape.BoundBox.XMin
-    rec.Placement.Base.y = YY
-    FreeCAD.activeDocument().recompute()
-
-    common = land.Shape.common(rec.Shape)
-    for shape in common.Faces:
-        if shape.Area >= area:
-            if False:
-                minorPoint = FreeCAD.Vector(0, 0, 0)
-                for spoint in shape.OuterWire.Vertexes:
-                    if minorPoint.y >= spoint.Point.y:
-                        if minorPoint.x >= spoint.x:
-                            minorPoint = spoint
-                            rackClone.Placement.Base = spoint
-            else:
-                # más rápido
-                rackClone.Placement.Base.x = shape.BoundBox.XMin
-                rackClone.Placement.Base.y = shape.BoundBox.YMin
-
-            while rackClone.Shape.BoundBox.XMax <= shape.BoundBox.XMax:
-                verts = [v.Point for v in rackClone.Shape.OuterWire.OrderedVertexes]
-                inside = True
-                for vert in verts:
-                    if not shape.isInside(vert, 0, True):
-                        inside = False
-                        break
-                if inside:
-                    # tmp = rack.Shape.copy()
-                    # tmp.Placement = rack.Placement
-                    tmp = Draft.makeRectangle(length=rack.Length, height=rack.Height, placement=rackClone.Placement,
-                                              face=True, support=None)
-                    tmp.Label = 'R{:03}-000'.self.format(colNumber)
-
-                    rackClone.Placement.Base.x += ColSpacing
-                else:
-                    # ajuste fino hasta encontrar el primer sitio:
-                    rackClone.Placement.Base.x += 500  # medio metro
-    del common
-    FreeCAD.ActiveDocument.removeObject(rackClone.Name)
-    FreeCAD.ActiveDocument.removeObject(rec.Name)
-
-# Alinear columna y fila (grid perfecta)
-def CreateGrid(XX, YY, rack, land, ColSpacing, area):
-    print("CreateGrid")
-    rackClone = Draft.makeRectangle(length=rack.Length, height=rack.Height, face=True, support=None)
-    rackClone.Label = 'rackClone{a}'.self.format(a=XX)
-    rackClone.Placement.Base.x = XX
-    rackClone.Placement.Base.y = YY
-
-    # if False:
-    while rackClone.Shape.BoundBox.YMax < land.Shape.BoundBox.YMax:
-        common = land.Shape.common(rackClone.Shape)
-
-        if common.Area >= area:
-            tmp = Draft.makeRectangle(length=rack.Length, height=rack.Height,
-                                      placement=rackClone.Placement, face=True, support=None)
-            tmp.Label = 'rackClone{a}'.self.format(a=XX)
-        rackClone.Placement.Base.y += ColSpacing
-        # else:
-        #    # ajuste fino hasta encontrar el primer sitio:
-        #    rackClone.Placement.Base.y += 1000
-    FreeCAD.ActiveDocument.removeObject(rackClone.Name)
-
-# Alinear solo filas. las columnas donde se pueda
-def CreateCol(XX, YY, rack, land, ColSpacing, area):
-    rackClone = Draft.makeRectangle(length=rack.Length, height=rack.Height, face=True, support=None)
-    rackClone.Label = 'rackClone{a}'.self.format(a=XX)
-    rackClone.Placement.Base.x = XX
-    rackClone.Placement.Base.y = YY
-
-    while rackClone.Shape.BoundBox.YMax < land.Shape.BoundBox.YMax:
-        common = land.Shape.common(rackClone.Shape)
-
-        if common.Area >= area:
-            tmp = Draft.makeRectangle(length=rack.Length, height=rack.Height,
-                                      placement=rackClone.Placement, face=True, support=None)
-            tmp.Label = 'rackClone{a}'.self.format(a=XX)
-            rackClone.Placement.Base.y += ColSpacing
-        else:
-            # ajuste fino hasta encontrar el primer sitio:
-            rackClone.Placement.Base.y += 100
-
-    FreeCAD.ActiveDocument.removeObject(rackClone.Name)
 
 # -----------------------------------------------------------------------------------------------------------------------
 # function AdjustToTerrain
@@ -1236,13 +694,74 @@ def CreateCol(XX, YY, rack, land, ColSpacing, area):
 #   Inputs:
 #   1. frames: group of objest to adjust
 # -----------------------------------------------------------------------------------------------------------------------
+def adjustToTerrain(sel):
+    terrain = PVPlantSite.get().Terrain.Shape
+    cols = getCols(frames)
+    for col in cols:
+        for group in col:
+            frame1 = group[0]  # Norte
+            frame_1 = group[-1]  # Sur
+
+            points = []
+            ed = frame1.Shape.Edges[1]
+            points.append(ed.valueAt(ed.FirstParameter + 0.5 * (ed.LastParameter - ed.FirstParameter)))
+            for ind in range(0, len(group) - 1):
+                ed1 = group[ind].Shape.Edges[3]
+                ed2 = group[ind + 1].Shape.Edges[1]
+                middlepoint = (ed1.valueAt(ed1.FirstParameter + 0.5 * (ed1.LastParameter - ed1.FirstParameter)) +
+                               ed2.valueAt(ed2.FirstParameter + 0.5 * (ed2.LastParameter - ed2.FirstParameter))) / 2
+                points.append(middlepoint)
+            ed = frame_1.Shape.Edges[3]
+            points.append(ed.valueAt(ed.FirstParameter + 0.5 * (ed.LastParameter - ed.FirstParameter)))
+
+            # TODO: esperar a que funcione bien esta función. Mientras tanto se usa el código que va a continuación
+            # Otra opción: hacer un crucen entre la vertical y la horizontal para ver donde se cortan
+            # points3D = mp.projectPointsOnMesh(points, terrain, FreeCAD.Vector(0, 0, 1))
+            points3D = []
+            for point in points:
+                c = 0
+                while True:
+                    point3D = mp.projectPointsOnMesh([point, ], terrain, FreeCAD.Vector(0, 0, 1))
+                    if len(point3D) > 0:
+                        points3D.append(point3D[0])
+                        break
+                    point.y += 100
+                    c += 1
+                    if c == 10:
+                        break
+
+            for ind in range(0, len(points3D) - 1):
+                vec = points3D[ind] - points3D[ind + 1]
+                angle = math.degrees(vec.getAngle(FreeCAD.Vector(0, 1, 0)))
+                if angle > 90:
+                    angle = angle - 180
+                if vec.z >= 0:
+                    angle *= -1
+                frame = group[ind]
+                p = (points3D[ind] + points3D[ind + 1]) / 2
+                frame.Placement.Base = FreeCAD.Vector(frame.Placement.Base.x, frame.Placement.Base.y, p.z)
+                frame.Placement.Rotation = FreeCAD.Rotation(frame.Placement.Rotation.toEuler()[0], angle, 0)
+
+    FreeCAD.activeDocument().recompute()
+
+
+def getAxis(sel):
+    site = FreeCAD.ActiveDocument.Site.Shape
+    for rack in sel:
+        poles = rack.Shape.SubShapes[1].SubShapes
+        line = Part.LineSegment(poles[0].BoundBox.Center, poles[-1].BoundBox.Center)
+        Part.show(line.toShape())
+        pro = site.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
+        Part.show(pro)
+
+
 def AdjustToTerrain_V1_(sel):
     import MeshPart as mp
     import functools
     import math
     import Part
 
-    terrain = getTerrain().Mesh
+    terrain = PVPlantSite.get().Terrain.Mesh
 
     for obj in sel:
         points = []
@@ -1263,13 +782,14 @@ def AdjustToTerrain_V1_(sel):
                 if c == 10:
                     break
 
+
 def AdjustToTerrain_V0(frames):
     import MeshPart as mp
     import functools
     import math
     import Part
 
-    terrain = getTerrain().Mesh
+    terrain = PVPlantSite.get().Terrain.Mesh
 
     for frame in frames:
         if frame.Shape.BoundBox.XLength > frame.Shape.BoundBox.YLength:
@@ -1304,12 +824,13 @@ def AdjustToTerrain_V0(frames):
         del l
         del edge
 
+
 def AdjustToTerrain_V1(frames):
     import MeshPart as mp
     import math
     import Part
 
-    terrain = getTerrain().Mesh.copy()
+    terrain = PVPlantSite.get().Terrain.Mesh.copy()
     cols = getCols(frames)
     for col in cols:
         for group in col:
@@ -1416,19 +937,6 @@ def getCols(sel, tolerance=2000):
                   reverse=False)  # Orden Oeste - Este  (Izquierda a derecha)
     return cols
 
-def setrename():
-    yy = 0
-    for col in cols:
-        for obj in col:
-            obj.Label = "Col(" + str(yy) + ")"
-        yy += 1
-
-def select(val):
-    col = ols[val]
-    for group in col:
-        for obj in group:
-            FreeCADGui.Selection.addSelection(obj)
-
 
 # -----------------------------------------------------------------------------------------------------------------------
 # Convert
@@ -1464,6 +972,7 @@ class _PVPlantConvertTaskPanel:
             ConvertObjectsTo(sel, self.To)
             return True
         return False
+
 
 # -----------------------------------------------------------------------------------------------------------------------
 # function ConvertObjectsTo
