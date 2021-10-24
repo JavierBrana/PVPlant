@@ -20,12 +20,13 @@
 # *                                                                     *
 # ***********************************************************************
 
-
 import FreeCAD
 import Part
 import Draft
 import numpy as np
 import os
+import copy
+import math
 
 if FreeCAD.GuiUp:
     import FreeCADGui, os
@@ -512,11 +513,11 @@ class _PVPlantPlacementTaskPanel:
 
     def createFrameFromPoints(self, pl):
         try:
-            MechanicalGroup = FreeCAD.ActiveDocument.Mechanical
+            MechanicalGroup = FreeCAD.ActiveDocument.Frames
         except:
-            MechanicalGroup = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup", 'Mechanical')
-            MechanicalGroup.Label = "Mechanical"
-            FreeCAD.ActiveDocument.Site.addObject(MechanicalGroup)
+            MechanicalGroup = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup", 'Frames')
+            MechanicalGroup.Label = "Frames"
+
 
         for point in pl:
             newrack = FreeCAD.ActiveDocument.copyObject(self.Rack)
@@ -526,6 +527,7 @@ class _PVPlantPlacementTaskPanel:
             newrack.Visibility = True
             MechanicalGroup.addObject(newrack)
 
+        FreeCAD.ActiveDocument.Site.addObject(MechanicalGroup)
         # TODO: ajustar los tracker al terreno
 
     def calculateAlignedArray(self):
@@ -537,7 +539,6 @@ class _PVPlantPlacementTaskPanel:
                                                                                    self.Rack.Shape.BoundBox.YLength)
         offset_x = FreeCAD.Units.Quantity(self.form.editOffsetHorizontal.text()).Value
         offset_y = FreeCAD.Units.Quantity(self.form.editOffsetVertical.text()).Value
-        Terrain = PVPlantSite.get().Terrain.Shape
 
         # TODO: Chequear la forma: Ver que esté cerrada y transformarla en cara.
         Area = self.PVArea.Shape
@@ -573,8 +574,8 @@ class _PVPlantPlacementTaskPanel:
         starty = refh.BoundBox.YMin + offset_y + gap_row * steps
         # todo end ----------------------------------------------------------------------------------
 
-        pointsx = np.arange(startx, Terrain.BoundBox.XMax, gap_col)
-        pointsy = np.arange(starty, Terrain.BoundBox.YMin, -gap_row)
+        pointsx = np.arange(startx, Area.BoundBox.XMax, gap_col)
+        pointsy = np.arange(starty, Area.BoundBox.YMin, -gap_row)
 
         pl = []
         for x in pointsx:
@@ -586,7 +587,7 @@ class _PVPlantPlacementTaskPanel:
                     cut = cp.cut([Area])
                     if cut.Area == 0:
                         pl.append(cp.BoundBox.Center)
-                        Part.show(cp)
+                        #Part.show(cp)
 
         total_time = datetime.now() - starttime
         print(" -- Tiempo tardado:", total_time)
@@ -603,7 +604,7 @@ class _PVPlantPlacementTaskPanel:
                                                                                    self.Rack.Shape.BoundBox.YLength)
         offset_x = FreeCAD.Units.Quantity(self.form.editOffsetHorizontal.text()).Value
         offset_y = FreeCAD.Units.Quantity(self.form.editOffsetVertical.text()).Value
-        Terrain = PVPlantSite.get().Terrain.Shape
+
         Area = self.PVArea.Shape
 
         rec = Part.makePlane(self.Rack.Shape.BoundBox.YLength, self.Rack.Shape.BoundBox.XLength)
@@ -632,11 +633,10 @@ class _PVPlantPlacementTaskPanel:
 
         steps = int((refv.BoundBox.XMax - Area.BoundBox.XMin + offset_x) / gap_col)
         startx = refv.BoundBox.XMax + offset_x - gap_col * steps
-
         # todo end ----------------------------------------------------------------------------------
 
         start = FreeCAD.Vector(startx, 0.0, 0.0)
-        pointsx = np.arange(start.x, Terrain.BoundBox.XMax, gap_col)
+        pointsx = np.arange(start.x, Area.BoundBox.XMax, gap_col)
 
         pl = []
         for point in pointsx:
@@ -658,7 +658,7 @@ class _PVPlantPlacementTaskPanel:
                     for point in pointsy:
                         cp = rec.copy()
                         cp.Placement.Base = FreeCAD.Vector(pts[i].x - rec.BoundBox.XLength / 2, point, 0.0)
-                        cut = cp.cut([Area])
+                        cut = cp.cut([Area], 0)
                         if cut.Area == 0:
                             Part.show(cp)
                             pl.append(point)
@@ -679,7 +679,7 @@ class _PVPlantPlacementTaskPanel:
         else:
             placements = self.calculateNonAlignedArray()
 
-        #self.createFrameFromPoints(placements)
+        self.createFrameFromPoints(placements)
 
         FreeCADGui.Control.closeDialog()
         return True
@@ -696,39 +696,30 @@ class _PVPlantPlacementTaskPanel:
 # -----------------------------------------------------------------------------------------------------------------------
 def adjustToTerrain(sel):
     terrain = PVPlantSite.get().Terrain.Shape
-    cols = getCols(frames)
+    cols = getCols(sel)
     for col in cols:
         for group in col:
             frame1 = group[0]  # Norte
             frame_1 = group[-1]  # Sur
 
             points = []
-            ed = frame1.Shape.Edges[1]
-            points.append(ed.valueAt(ed.FirstParameter + 0.5 * (ed.LastParameter - ed.FirstParameter)))
+            points.append(FreeCAD.Vector(frame1.Shape.BoundBox.Center.x, frame1.Shape.BoundBox.YMax, 0))
             for ind in range(0, len(group) - 1):
-                ed1 = group[ind].Shape.Edges[3]
-                ed2 = group[ind + 1].Shape.Edges[1]
-                middlepoint = (ed1.valueAt(ed1.FirstParameter + 0.5 * (ed1.LastParameter - ed1.FirstParameter)) +
-                               ed2.valueAt(ed2.FirstParameter + 0.5 * (ed2.LastParameter - ed2.FirstParameter))) / 2
+                middlepoint = (group[ind].Shape.BoundBox.Center + group[ind + 1].Shape.BoundBox.Center) / 2
                 points.append(middlepoint)
-            ed = frame_1.Shape.Edges[3]
-            points.append(ed.valueAt(ed.FirstParameter + 0.5 * (ed.LastParameter - ed.FirstParameter)))
+            points.append(FreeCAD.Vector(frame_1.Shape.BoundBox.Center.x, frame_1.Shape.BoundBox.YMax, 0))
 
-            # TODO: esperar a que funcione bien esta función. Mientras tanto se usa el código que va a continuación
-            # Otra opción: hacer un crucen entre la vertical y la horizontal para ver donde se cortan
-            # points3D = mp.projectPointsOnMesh(points, terrain, FreeCAD.Vector(0, 0, 1))
             points3D = []
             for point in points:
-                c = 0
-                while True:
-                    point3D = mp.projectPointsOnMesh([point, ], terrain, FreeCAD.Vector(0, 0, 1))
-                    if len(point3D) > 0:
-                        points3D.append(point3D[0])
-                        break
-                    point.y += 100
-                    c += 1
-                    if c == 10:
-                        break
+                p1 = copy.deepcopy(point)
+                p1.z = terrain.BoundBox.ZMax
+                p2 = copy.deepcopy(point)
+                p2.z = terrain.BoundBox.ZMin
+                print(p1, " ", p2)
+                line = Part.LineSegment(p1, p2)
+                section = terrain.section(line.toShape())
+                if len(section.Vertexes) > 0:
+                    points3D.append(section.Vertexes[0].Point)
 
             for ind in range(0, len(points3D) - 1):
                 vec = points3D[ind] - points3D[ind + 1]
@@ -746,7 +737,7 @@ def adjustToTerrain(sel):
 
 
 def getAxis(sel):
-    site = FreeCAD.ActiveDocument.Site.Shape
+    site = FreeCAD.ActiveDocument.Site.Terrain.Shape
     for rack in sel:
         poles = rack.Shape.SubShapes[1].SubShapes
         line = Part.LineSegment(poles[0].BoundBox.Center, poles[-1].BoundBox.Center)
@@ -758,8 +749,6 @@ def getAxis(sel):
 def AdjustToTerrain_V1_(sel):
     import MeshPart as mp
     import functools
-    import math
-    import Part
 
     terrain = PVPlantSite.get().Terrain.Mesh
 
@@ -838,32 +827,19 @@ def AdjustToTerrain_V1(frames):
             frame_1 = group[-1]  # Sur
 
             points = []
-            ed = frame1.Shape.Edges[1]
-            points.append(ed.valueAt(ed.FirstParameter + 0.5 * (ed.LastParameter - ed.FirstParameter)))
+            points.append(FreeCAD.Vector(frame1.Shape.BoundBox.Center.x, frame1.Shape.BoundBox.YMax, 0))
             for ind in range(0, len(group) - 1):
-                ed1 = group[ind].Shape.Edges[3]
-                ed2 = group[ind + 1].Shape.Edges[1]
-                middlepoint = (ed1.valueAt(ed1.FirstParameter + 0.5 * (ed1.LastParameter - ed1.FirstParameter)) +
-                               ed2.valueAt(ed2.FirstParameter + 0.5 * (ed2.LastParameter - ed2.FirstParameter))) / 2
+                middlepoint = (group[ind].Shape.BoundBox.Center + group[ind + 1].Shape.BoundBox.Center) / 2
                 points.append(middlepoint)
-            ed = frame_1.Shape.Edges[3]
-            points.append(ed.valueAt(ed.FirstParameter + 0.5 * (ed.LastParameter - ed.FirstParameter)))
+            points.append(FreeCAD.Vector(frame_1.Shape.BoundBox.Center.x, frame_1.Shape.BoundBox.YMax, 0))
 
-            # TODO: esperar a que funcione bien esta función. Mientras tanto se usa el código que va a continuación
-            # Otra opción: hacer un crucen entre la vertical y la horizontal para ver donde se cortan
-            # points3D = mp.projectPointsOnMesh(points, terrain, FreeCAD.Vector(0, 0, 1))
             points3D = []
             for point in points:
-                c = 0
-                while True:
-                    point3D = mp.projectPointsOnMesh([point, ], terrain, FreeCAD.Vector(0, 0, 1))
-                    if len(point3D) > 0:
-                        points3D.append(point3D[0])
-                        break
-                    point.y += 100
-                    c += 1
-                    if c == 10:
-                        break
+                point3D = mp.projectPointsOnMesh([point, ], terrain, FreeCAD.Vector(0, 0, 1))
+                if len(point3D) > 0:
+                    points3D.append(point3D[0])
+                    break
+                point.y += 100
 
             for ind in range(0, len(points3D) - 1):
                 vec = points3D[ind] - points3D[ind + 1]
@@ -1059,8 +1035,9 @@ class _CommandAdjustToTerrain:
     def Activated(self):
         sel = FreeCADGui.Selection.getSelection()
         if len(sel) > 0:
-            AdjustToTerrain_V1(sel)
+            #AdjustToTerrain_V1(sel)
             # AdjustToTerrain__(sel)
+            adjustToTerrain(sel)
         else:
             print("No selected object")
 

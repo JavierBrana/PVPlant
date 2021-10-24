@@ -273,10 +273,10 @@ class _StringBox(ArchComponent.Component):
                     inname = ("PositiveIn" if type == 0 else "NegativeIn") + str(cnt)
                     obj.addProperty("Part::PropertyPartShape",
                                     inname,
-                                    "Connections",
+                                    "Inputs",
                                     QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                                     )
-                    obj.setEditorMode("PositiveOut", 1)
+                    obj.setEditorMode(inname, 1)
                     setattr(obj, inname, getdownFace(cyl))
                     cpd.add(cyl)
                 numInputs -= nperrow

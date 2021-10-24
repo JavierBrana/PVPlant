@@ -53,6 +53,12 @@ def makeStringSetup():
     obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "StringSetup")
     _StringSetup(obj)
     _ViewProviderStringSetup(obj.ViewObject)
+
+    if FreeCAD.ActiveDocument.StringsSetup:
+        FreeCAD.ActiveDocument.StringsSetup.addObject(obj)
+
+    FreeCAD.ActiveDocument.recompute()
+
     return obj
 
 class _StringSetup:
@@ -279,6 +285,10 @@ def makeString(base=None):
     _String(obj)
     obj.Frame = base
     _ViewProviderString(obj.ViewObject)
+
+    if FreeCAD.ActiveDocument.Strings:
+        FreeCAD.ActiveDocument.Strings.addObject(obj)
+
     FreeCAD.ActiveDocument.recompute()
     return obj
 

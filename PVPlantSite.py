@@ -121,40 +121,42 @@ def projectWireOnMesh(Boundary, Mesh):
         FreeCAD.ActiveDocument.recompute()
 
 
-def makePVPlantSite(name="Site"):
-
+def makePVPlantSite():
     def createGroup(father, groupname, type = None):
         group = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup", groupname)
         group.Label = groupname
-        ObjGroups = father.Group
-        ObjGroups.append(group)
-        father.Group = ObjGroups
+        father.addObject(group)
         return group
 
     obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Site")
-    obj.Label = name
     _PVPlantSite(obj)
     if FreeCAD.GuiUp:
         _ViewProviderSite(obj.ViewObject)
 
     group = createGroup(obj, "CivilGroup")
-    createGroup(group, "Areas")
+    group1 = createGroup(group, "Areas")
+    createGroup(group1, "Boundary")
+    createGroup(group1, "Offset")
+    createGroup(group1, "Exclusion")
     createGroup(group, "Drain")
     createGroup(group, "Earthworks")
     createGroup(group, "Fence")
     createGroup(group, "Foundations")
     createGroup(group, "Pads")
+    createGroup(group, "Points")
     createGroup(group, "Roads")
 
     group = createGroup(obj, "ElectricalGroup")
     group1 = createGroup(group, "AC")
-    createGroup(group1, "Cable")
+    createGroup(group1, "CableAC")
     group1 = createGroup(group, "DC")
-    createGroup(group1, "Cable")
+    createGroup(group1, "CableDC")
+    createGroup(group1, "StringsSetup")
     createGroup(group1, "Strings")
     createGroup(group1, "StringsBoxes")
 
     group = createGroup(obj, "MechanicalGroup")
+    createGroup(group, "FramesSetup")
     createGroup(group, "Frames")
 
     return obj
@@ -1178,9 +1180,8 @@ class _CommandPVPlantSite:
         return not FreeCAD.ActiveDocument is None
 
     def Activated(self):
-
-        makePVPlantSite("")
-        return;
+        makePVPlantSite()
+        return
 
         sel = FreeCADGui.Selection.getSelection()
         p = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Arch")
