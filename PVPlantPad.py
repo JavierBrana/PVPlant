@@ -30,10 +30,8 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui, QtSvg
     from DraftTools import translate
     from PySide.QtCore import QT_TRANSLATE_NOOP
-    import draftguitools.gui_trackers as DraftTrackers
 
     import Part
-    import pivy
     from pivy import coin
     import os
 else:
@@ -59,6 +57,10 @@ def makePad(base=None):
     _Pad(obj)
     _ViewProviderPad(obj.ViewObject)
     obj.Base = base
+
+    if FreeCAD.ActiveDocument.Pads:
+        FreeCAD.ActiveDocument.Pads.addObject(obj)
+
     FreeCAD.ActiveDocument.recompute()
     return obj
 

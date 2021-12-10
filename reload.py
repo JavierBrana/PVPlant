@@ -28,8 +28,9 @@ class _CommandReload:
             PVPlantGeoreferencing, PVPlantImportGrid, PVPlantTerrainAnalisys, \
             PVPlantSite, PVPlantRack, PVPlantFence, PVPlantFencePost, PVPlantCreateTerrainMesh, \
             PVPlantFoundation, PVPlantTreeGenerator, exportPVSyst, \
-            PVPlantTrench, PVPEarthWorks, PVPlantBOQMechanical, PVPlantStringBox, PVPlantCable, PVPlantPad, \
-            PVPlantRoad, PVPlantTerrain, PVPlantStringing
+            PVPlantTrench, PVPEarthWorks, PVPlantStringBox, PVPlantCable, PVPlantPad, \
+            PVPlantRoad, PVPlantTerrain, PVPlantStringing, \
+            PVPlantBOQMechanical, PVPlantBOQElectrical, PVPlantArea
         #from  Lib import GoogleMapDownloader
 
         import importlib
@@ -47,13 +48,15 @@ class _CommandReload:
         importlib.reload(exportPVSyst)
         importlib.reload(PVPlantTrench)
         importlib.reload(PVPEarthWorks)
-        importlib.reload(PVPlantBOQMechanical)
         importlib.reload(PVPlantStringBox)
         importlib.reload(PVPlantCable)
         importlib.reload(PVPlantPad)
         importlib.reload(PVPlantRoad)
         importlib.reload(PVPlantTerrain)
         importlib.reload(PVPlantStringing)
+        importlib.reload(PVPlantBOQMechanical)
+        importlib.reload(PVPlantBOQElectrical)
+        importlib.reload(PVPlantArea)
 
         #importlib.reload(GoogleMapDownloader)
         print("Reload modules...")

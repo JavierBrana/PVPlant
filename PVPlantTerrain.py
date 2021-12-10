@@ -267,7 +267,15 @@ class _Terrain(ArchComponent.Component):
                 datavals = datavals[max_y:min_y, min_x:max_x]
 
                 # 2. fine: TODO: ----
+                '''
+                bnd = PVPlantSite.get().Terrain.CuttingBoundary
+                for xx in x:
+                    for yy in y:
+                        if not bnd.Shape.isInside(FreeCAD.Vector(xx, yy, 0), True):
+                            datavals[xx][yy] = nodata_value
+                '''
 
+                # Create surface:
                 if False:  # faster but more memory 46s - 4,25 gb
                     x, y = np.meshgrid(x, y)
                     xx = x.flatten()
@@ -278,7 +286,8 @@ class _Terrain(ArchComponent.Component):
                     datavals[:] = 0
                     pts = []
                     for i in range(0, len(xx)):
-                        pts.append(FreeCAD.Vector(xx[i], yy[i], zz[i]) * 1000)
+                        if datavals[j][i] != nodata_value:
+                            pts.append(FreeCAD.Vector(xx[i], yy[i], zz[i]) * 1000)
 
                     xx[:] = 0
                     yy[:] = 0
@@ -287,14 +296,15 @@ class _Terrain(ArchComponent.Component):
                     import PVPlantCreateTerrainMesh
                     PVPlantCreateTerrainMesh.Triangulate()
 
-                else:  # 51s 3,2 gb
+                else:  # 51s - 3,2 gb
                     lines = []
                     for j in range(len(y)):
                         edges = []
                         for i in range(0, len(x) - 1):
-                            ed = Part.makeLine(FreeCAD.Vector(x[i], y[j], datavals[j][i]) * 1000,
-                                               FreeCAD.Vector(x[i + 1], y[j], datavals[j][i + 1]) * 1000)
-                            edges.append(ed)
+                            if datavals[j][i] != nodata_value:
+                                ed = Part.makeLine(FreeCAD.Vector(x[i], y[j], datavals[j][i]) * 1000,
+                                                   FreeCAD.Vector(x[i + 1], y[j], datavals[j][i + 1]) * 1000)
+                                edges.append(ed)
                         line = Part.Wire(edges)
                         lines.append(line)
                     p = Part.makeLoft(lines, False, True, False)

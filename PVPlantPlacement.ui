@@ -73,7 +73,7 @@
     </widget>
    </item>
    <item row="4" column="0" colspan="3">
-    <widget class="QGroupBox" name="groupBox_2">
+    <widget class="QGroupBox" name="groupCorridor">
      <property name="title">
       <string>Corridor settings</string>
      </property>
@@ -102,7 +102,7 @@
        </widget>
       </item>
       <item row="3" column="1">
-       <widget class="QDoubleSpinBox" name="doubleSpinBox_2">
+       <widget class="QDoubleSpinBox" name="editRowGap">
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
         </property>
@@ -138,7 +138,7 @@
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="QDoubleSpinBox" name="doubleSpinBox">
+       <widget class="QDoubleSpinBox" name="editColGap">
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
         </property>
@@ -160,7 +160,7 @@
        </widget>
       </item>
       <item row="2" column="1">
-       <widget class="QSpinBox" name="spinBox_2">
+       <widget class="QSpinBox" name="editRowCount">
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
         </property>
@@ -170,7 +170,7 @@
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QSpinBox" name="spinBox">
+       <widget class="QSpinBox" name="editColCount">
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
         </property>
@@ -326,13 +326,13 @@
   <tabstop>editOffsetHorizontal</tabstop>
   <tabstop>editOffsetVertical</tabstop>
   <tabstop>cbAlignFrames</tabstop>
-  <tabstop>groupBox_2</tabstop>
+  <tabstop>groupCorridor</tabstop>
   <tabstop>buttonFrame</tabstop>
   <tabstop>editFrame</tabstop>
-  <tabstop>spinBox</tabstop>
-  <tabstop>doubleSpinBox</tabstop>
-  <tabstop>spinBox_2</tabstop>
-  <tabstop>doubleSpinBox_2</tabstop>
+  <tabstop>editColCount</tabstop>
+  <tabstop>editColGap</tabstop>
+  <tabstop>editRowCount</tabstop>
+  <tabstop>editRowGap</tabstop>
  </tabstops>
  <resources/>
  <connections/>

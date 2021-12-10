@@ -70,15 +70,12 @@ class _Trench(ArchComponent.Component):
     def __init__(self, obj):
         # Definición de Variables:
         ArchComponent.Component.__init__(self, obj)
-        self.obj = obj
         self.setProperties(obj)
-        self.Type = "Trench"
-        obj.Proxy = self
 
         self.route = False
 
         obj.IfcType = "Civil Element"  ## puede ser: Cable Carrier Segment
-        obj.setEditorMode("IfcType", 1)
+        #obj.setEditorMode("IfcType", 1)
 
     def setProperties(self, obj):
         # Definicion de Propiedades:
@@ -177,14 +174,16 @@ class _Trench(ArchComponent.Component):
                         "Trench",
                         QT_TRANSLATE_NOOP("App::Property", "Connection")).Sand_Height = 400
 
+        self.obj = obj
+        self.Type = "Trench"
+        obj.Proxy = self
+
     def onDocumentRestored(self, obj):
         """Method run when the document is restored.
         Re-adds the component, and object properties."""
 
         ArchComponent.Component.onDocumentRestored(self, obj)
-        self.obj = obj
-        self.Type = "Trench"
-        obj.Proxy = self
+        self.setProperties(obj)
 
     def execute(self, obj):
         import Part, DraftGeomUtils, math
@@ -193,6 +192,7 @@ class _Trench(ArchComponent.Component):
         w = self.calculatePathWire(obj)
         land = FreeCAD.ActiveDocument.Site.Terrain.Shape
         w = Part.Wire(land.makeParallelProjection(w, FreeCAD.Vector(0, 0, 1)).Edges)
+        Part.show(w, "Projected_wire")
 
         vec_down_left = FreeCAD.Vector(-obj.Width.Value / 2, 0, -obj.Height.Value)
         vec_down_right = FreeCAD.Vector(obj.Width.Value / 2, 0, -obj.Height.Value)
@@ -201,21 +201,18 @@ class _Trench(ArchComponent.Component):
         vec_sand_left = FreeCAD.Vector(-obj.Width.Value / 2, 0, -obj.Height.Value + obj.Sand_Height.Value)
         vec_sand_right = FreeCAD.Vector(obj.Width.Value / 2, 0, -obj.Height.Value + obj.Sand_Height.Value)
 
-        vec_top = FreeCAD.Vector(0, 0, land.BoundBox.ZLength)
-
-        vec_down_left = FreeCAD.Vector(-obj.Width.Value / 2, 0, -obj.Height.Value)
-        vec_down_right = FreeCAD.Vector(obj.Width.Value / 2, 0, -obj.Height.Value)
-        vec_top_left = vec_down_left + vec_top
-        vec_top_right = vec_down_right + vec_top
 
         # 1. Perfil original del cual salen todos los demás:
         p = Part.makePolygon([vec_down_left, vec_down_right])
-        c = (vec_up_right - vec_up_left) / 2
-        Part.show(p)
-        sh = w.makePipeShell([p, ], True, False, 1)
+        p = Part.makePolygon([vec_down_left, vec_down_right, vec_up_right, vec_up_left, vec_down_left])
+        c = (vec_up_right + vec_up_left) / 2
+        delta = w.Vertexes[0].Point - c
+        p.translate(delta)
+        Part.show(p, "P")
+        sh = w.makePipeShell([p, ], True, True, 2)
         Part.show(sh)
-        return
 
+        return
         shapes = []
         p = Part.makePolygon([vec_down_left, vec_down_right, vec_up_right, vec_up_left, vec_down_left])
         fill = self.calculateLoft(obj, p, c, w)

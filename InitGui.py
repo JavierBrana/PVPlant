@@ -41,7 +41,7 @@ class PVPlantWorkbench (Workbench):
             PVPlantFoundation, PVPlantCreateTerrainMesh, \
             PVPlantTreeGenerator, PVPlantTrench, PVPEarthWorks, \
             PVPlantStringBox, PVPlantCable, PVPlantStringing, \
-            PVPlantPad, PVPlantRoad, PVPlantTerrain, \
+            PVPlantPad, PVPlantRoad, PVPlantTerrain, PVPlantArea, \
             exportDXF, exportPVSyst, PVPlantBOQMechanical, PVPlantBOQElectrical, PVPlantBOQCivil,\
             reload
 
@@ -64,6 +64,7 @@ class PVPlantWorkbench (Workbench):
                      "PVPlantPlacement",
                      "PVPlantAdjustToTerrain",
                      "PVPlantConvertTo",
+                     "PVArea"
                      ]
 
         self.list2 = [

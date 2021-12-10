@@ -707,6 +707,13 @@ class _Tracker(_Frame):
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).MotorGap = 550
 
+        if not "UseGroupsOfModules" in pl:
+            obj.addProperty("App::PropertyBool",
+                            "UseGroupsOfModules",
+                            "GroupsOfModules",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).UseGroupsOfModules = False
+
         # Poles: ------------------------------------------------------------------------------------------------------
         if not "PoleHeight" in pl:
             obj.addProperty("App::PropertyLength",
@@ -848,6 +855,28 @@ class _Tracker(_Frame):
         'PoleCableLength', 'PoleHeight', 'PoleLength', 'PoleWidth', 'Proxy', 'Shape', 'ShowBeams', 'StandardCode', 
         'Subtractions', 'Tag', 'Tilt', 'TotalAreaShape', 'VerticalArea', 'Visibility', 'Width']
         '''
+
+        if prop == "UseGroupsOfModules":
+            if obj.getPropertyByName(prop) == True:
+                if not "ColumnsPerGroup" in obj.PropertiesList:
+                    obj.addProperty("App::PropertyIntegerList",
+                                    "ColumnsPerGroup",
+                                    "GroupsOfModules",
+                                    QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                                    )
+
+                if not "GroupGaps" in obj.PropertiesList:
+                    obj.addProperty("App::PropertyIntegerList",
+                                    "GroupGaps",
+                                    "GroupsOfModules",
+                                    QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                                    )
+
+            else:
+                if "ColumnsPerGroup" in obj.PropertiesList:
+                    obj.removeProperty("ColumnsPerGroup")
+                if "GroupGaps" in obj.PropertiesList:
+                    obj.removeProperty("GroupGaps")
 
         self.changed = True
         '''
@@ -1022,7 +1051,6 @@ class _Tracker(_Frame):
         #
         # once you have done this structure you don´t need recompute everything, only the part you need
 
-        print(" -----   Execute: ", self.changed)
         if self.changed:
             self.changed = False
             pl = obj.Placement

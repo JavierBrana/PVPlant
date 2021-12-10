@@ -577,17 +577,42 @@ class _PVPlantPlacementTaskPanel:
         pointsx = np.arange(startx, Area.BoundBox.XMax, gap_col)
         pointsy = np.arange(starty, Area.BoundBox.YMin, -gap_row)
 
+        if self.form.groupCorridor.isChecked():
+            if (self.form.editColCount.value() > 0):
+                xlen = len(pointsx)
+                count = self.form.editColCount.value()
+                val = FreeCAD.Units.Quantity(self.form.editColGap.text()).Value - (gap_col - min(self.Rack.Shape.BoundBox.XLength,self.Rack.Shape.BoundBox.YLength))
+                while count <= xlen:
+                    for i, point in enumerate(pointsx):
+                        if i >= count:
+                            pointsx[i] += val
+                    count += self.form.editColCount.value()
+
+            if (self.form.editRowCount.value() > 0):
+                ylen = len(pointsy)
+                count = self.form.editRowCount.value()
+                val = FreeCAD.Units.Quantity(self.form.editRowGap.text()).Value + gap_col - FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value
+                while count <= ylen:
+                    for i, point in enumerate(pointsy):
+                        if i >= count:
+                            pointsy[i] -= val
+                    count += self.form.editRowCount.value()
+
         pl = []
         for x in pointsx:
+            col = []
             for y in pointsy:
                 point = FreeCAD.Vector(x, y - rec.BoundBox.YLength, 0.0)
                 if Area.isInside(point, 0.1, True):
                     cp = rec.copy()
                     cp.Placement.Base = point
                     cut = cp.cut([Area])
-                    if cut.Area == 0:
+                    if len(cut.Vertexes) == 0:
                         pl.append(cp.BoundBox.Center)
-                        #Part.show(cp)
+                        Part.show(cp)
+                        col.append(cp)
+                    else:
+                        col.append(None)
 
         total_time = datetime.now() - starttime
         print(" -- Tiempo tardado:", total_time)
@@ -638,6 +663,17 @@ class _PVPlantPlacementTaskPanel:
         start = FreeCAD.Vector(startx, 0.0, 0.0)
         pointsx = np.arange(start.x, Area.BoundBox.XMax, gap_col)
 
+        if self.form.groupCorridor.isChecked():
+            if (self.form.editColCount.value() > 0):
+                xlen = len(pointsx)
+                count = self.form.editColCount.value()
+                val = FreeCAD.Units.Quantity(self.form.editColGap.text()).Value - (gap_col - min(self.Rack.Shape.BoundBox.XLength,self.Rack.Shape.BoundBox.YLength))
+                while count <= xlen:
+                    for i, point in enumerate(pointsx):
+                        if i >= count:
+                            pointsx[i] += val
+                    count += self.form.editColCount.value()
+
         pl = []
         for point in pointsx:
             p1 = FreeCAD.Vector(point, Area.BoundBox.YMax, 0.0)
@@ -659,7 +695,7 @@ class _PVPlantPlacementTaskPanel:
                         cp = rec.copy()
                         cp.Placement.Base = FreeCAD.Vector(pts[i].x - rec.BoundBox.XLength / 2, point, 0.0)
                         cut = cp.cut([Area], 0)
-                        if cut.Area == 0:
+                        if len(cut.Vertexes) == 0:
                             Part.show(cp)
                             pl.append(point)
 
@@ -673,13 +709,15 @@ class _PVPlantPlacementTaskPanel:
         if self.Terrain is None:
             self.Terrain = PVPlantSite.get().Terrain.Shape
 
-
+        FreeCAD.ActiveDocument.openTransaction("Create Placement")
         if self.form.cbAlignFrames.isChecked():
             placements = self.calculateAlignedArray()
         else:
             placements = self.calculateNonAlignedArray()
 
-        self.createFrameFromPoints(placements)
+
+        # last step: ------------------------------
+        #self.createFrameFromPoints(placements)
 
         FreeCADGui.Control.closeDialog()
         return True
@@ -694,47 +732,77 @@ class _PVPlantPlacementTaskPanel:
 #   Inputs:
 #   1. frames: group of objest to adjust
 # -----------------------------------------------------------------------------------------------------------------------
-def adjustToTerrain(sel):
+def adjustToTerrain(frames):
     terrain = PVPlantSite.get().Terrain.Shape
-    cols = getCols(sel)
+    cols = getCols(frames)
     for col in cols:
         for group in col:
             frame1 = group[0]  # Norte
             frame_1 = group[-1]  # Sur
 
+            p0 = FreeCAD.Vector(frame1.Shape.BoundBox.Center.x, frame1.Shape.BoundBox.YMax, 0)
+            pf = FreeCAD.Vector(frame_1.Shape.BoundBox.Center.x, frame_1.Shape.BoundBox.YMin, 0)
+
             points = []
-            points.append(FreeCAD.Vector(frame1.Shape.BoundBox.Center.x, frame1.Shape.BoundBox.YMax, 0))
+            points.append(p0)
             for ind in range(0, len(group) - 1):
                 middlepoint = (group[ind].Shape.BoundBox.Center + group[ind + 1].Shape.BoundBox.Center) / 2
                 points.append(middlepoint)
-            points.append(FreeCAD.Vector(frame_1.Shape.BoundBox.Center.x, frame_1.Shape.BoundBox.YMax, 0))
+            points.append(pf)
 
             points3D = []
-            for point in points:
-                p1 = copy.deepcopy(point)
-                p1.z = terrain.BoundBox.ZMax
-                p2 = copy.deepcopy(point)
-                p2.z = terrain.BoundBox.ZMin
-                print(p1, " ", p2)
-                line = Part.LineSegment(p1, p2)
-                section = terrain.section(line.toShape())
-                if len(section.Vertexes) > 0:
-                    points3D.append(section.Vertexes[0].Point)
 
+            if False:
+                line = Part.LineSegment(p0, pf)
+                pjt = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
+                for point in points:
+                    p1 = copy.deepcopy(point)
+                    p1.z = terrain.BoundBox.ZMax
+                    p2 = copy.deepcopy(point)
+                    p2.z = terrain.BoundBox.ZMin
+                    line = Part.LineSegment(p1, p2)
+                    tmp = line.intersectCC(pjt.Wires[0])
+                    print(tmp)
+
+            else:
+                if False:
+                    # lot of slow
+                    for point in points:
+                        p1 = copy.deepcopy(point)
+                        p1.z = terrain.BoundBox.ZMax
+                        p2 = copy.deepcopy(point)
+                        p2.z = terrain.BoundBox.ZMin
+                        line = Part.LineSegment(p1, p2)
+                        section = terrain.section(line.toShape())
+                        if len(section.Vertexes) > 0:
+                            points3D.append(section.Vertexes[0].Point)
+                        else:
+                            print("No common")
+                else:
+                    for ind in range(len(points) - 1):
+                        line = Part.LineSegment(points[ind], points[ind + 1])
+                        tmp = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0,0,1))
+                        if len(tmp.Vertexes) > 0:
+                            if ind == 0:
+                                points3D.append(tmp.Vertexes[0].Point)
+                            points3D.append(tmp.Vertexes[-1].Point)
+
+            Draft.makeWire(points3D)
             for ind in range(0, len(points3D) - 1):
                 vec = points3D[ind] - points3D[ind + 1]
                 angle = math.degrees(vec.getAngle(FreeCAD.Vector(0, 1, 0)))
+                angle1 = math.degrees(vec.getAngle(FreeCAD.Vector(0, 0, 1)))
+                #print(angle, " - ", angle1)
                 if angle > 90:
                     angle = angle - 180
-                if vec.z >= 0:
+                if vec.z < 0:
                     angle *= -1
                 frame = group[ind]
                 p = (points3D[ind] + points3D[ind + 1]) / 2
-                frame.Placement.Base = FreeCAD.Vector(frame.Placement.Base.x, frame.Placement.Base.y, p.z)
-                frame.Placement.Rotation = FreeCAD.Rotation(frame.Placement.Rotation.toEuler()[0], angle, 0)
+                frame.Placement.Base.z = p.z
+                frame.Placement.Rotation = FreeCAD.Rotation(0, 0, angle)
 
     FreeCAD.activeDocument().recompute()
-
 
 def getAxis(sel):
     site = FreeCAD.ActiveDocument.Site.Terrain.Shape
@@ -831,7 +899,7 @@ def AdjustToTerrain_V1(frames):
             for ind in range(0, len(group) - 1):
                 middlepoint = (group[ind].Shape.BoundBox.Center + group[ind + 1].Shape.BoundBox.Center) / 2
                 points.append(middlepoint)
-            points.append(FreeCAD.Vector(frame_1.Shape.BoundBox.Center.x, frame_1.Shape.BoundBox.YMax, 0))
+            points.append(FreeCAD.Vector(frame_1.Shape.BoundBox.Center.x, frame_1.Shape.BoundBox.YMin, 0))
 
             points3D = []
             for point in points:
@@ -860,14 +928,15 @@ def getCols(sel, tolerance=2000):
     cols = []
     while len(sel) > 0:
         obj = sel[0]
-        p = obj.Shape.BoundBox.Center  # TODO: Cambiar por centro de gravedad??
-        n = FreeCAD.Vector(1, 0, 0)  # TODO: como se consigue la verdadera normal a la estructura??
+        p = obj.Shape.BoundBox.Center
+        n = FreeCAD.Vector(1, 0, 0)  # TODO: detectar cual es el lado más pq
 
         # 1. Detectar los objetos que están en una misma columna
         col = []
         newsel = []
         for obj1 in sel:
             if obj1.Shape.BoundBox.isCutPlane(p, n):
+            #if obj1.Shape.Placement.Base.x == p.x: # TODO: Check this
                 col.append(obj1)
             else:
                 newsel.append(obj1)

@@ -1,6 +1,7 @@
 import FreeCAD
 import ArchComponent
 import Draft
+import Part
 
 if FreeCAD.GuiUp:
     import FreeCADGui, os
@@ -23,26 +24,28 @@ except AttributeError:
     def _fromUtf8(s):
         return s
 
-import threading
 import PVPlantResources
 
 
 def makeOffset(trackerPath, offset):
-    placement = trackerPath.Placement
+    pts = []
+    for point in trackerPath.Points:
+        tmp = FreeCAD.Vector(point.x, point.y, point.z + offset)
+        pts.append(tmp)
+    limit = Part.makePolygon(pts)
 
-    limit = FreeCAD.ActiveDocument.copyObject(trackerPath, False)
-    limit.Placement = placement
-    limit.Placement.Base.z += offset
-    limit.ViewObject.PointSize = 5.00
-    limit.ViewObject.LineWidth = 5.00
+    # placement = trackerPath.Placement
+    # limit = FreeCAD.ActiveDocument.copyObject(trackerPath, False)
+    # limit.Placement = placement
+    # limit.Placement.Base.z += offset
+    # limit.ViewObject.PointSize = 5.00
+    # limit.ViewObject.LineWidth = 5.00
 
     return limit
 
+
 def VertexesToPoints(Vertexes):
-    PointList = []
-    for ver in Vertexes:
-        PointList.append(ver.Point)
-    return PointList
+    return [ver.Point for ver in Vertexes]
 
 
 '''
@@ -60,36 +63,46 @@ function getCuts:
     2. newPath:
 ------------------------------------------------------------------------------------------------------------------------
 '''
+
+
 def getCuts(crossPoints, PointList):
     cutSection = []
     cutIndexes = []
+
     for ind in range(0, len(crossPoints) - 1, 2):
         Section = []
         Xmin = 0
         Xmax = 0
         Ymin = 0
         Ymax = 0
-        if crossPoints[ind].x <= crossPoints[ind + 1].x:
-            Xmin = crossPoints[ind].x
-            Xmax = crossPoints[ind + 1].x
-        else:
-            Xmin = crossPoints[ind + 1].x
-            Xmax = crossPoints[ind].x
 
-        if crossPoints[ind].y <= crossPoints[ind + 1].y:
-            Ymin = crossPoints[ind].y
-            Ymax = crossPoints[ind + 1].y
+        if True:
+            Xmin = min([crossPoints[ind].x, crossPoints[ind + 1].x])
+            Xmax = max([crossPoints[ind].x, crossPoints[ind + 1].x])
+            Ymin = min([crossPoints[ind].y, crossPoints[ind + 1].y])
+            Ymax = max([crossPoints[ind].y, crossPoints[ind + 1].y])
         else:
-            Ymin = crossPoints[ind + 1].y
-            Ymax = crossPoints[ind].y
+            if crossPoints[ind].x <= crossPoints[ind + 1].x:
+                Xmin = crossPoints[ind].x
+                Xmax = crossPoints[ind + 1].x
+            else:
+                Xmin = crossPoints[ind + 1].x
+                Xmax = crossPoints[ind].x
 
-        indexes =[]
+            if crossPoints[ind].y <= crossPoints[ind + 1].y:
+                Ymin = crossPoints[ind].y
+                Ymax = crossPoints[ind + 1].y
+            else:
+                Ymin = crossPoints[ind + 1].y
+                Ymax = crossPoints[ind].y
+
+        indexes = []
         Section.append(crossPoints[ind])
         for p in PointList:
             if (Xmin <= p.x <= Xmax) and (Ymin <= p.y <= Ymax):
                 Section.append(p)
                 indexes.append(PointList.index(p))
-        Section.append(crossPoints[ind+1])
+        Section.append(crossPoints[ind + 1])
         cutIndexes.append(indexes)
         cutSection.append(Section)
 
@@ -104,7 +117,6 @@ def getCuts(crossPoints, PointList):
             newPath.insert(cutRange[0], crossPoints[crossInd])
             crossInd -= 2
     return cutSection, newPath
-
 
 
 '''
@@ -122,62 +134,77 @@ function calculateEarthWorks:
     2. newPath:
 ------------------------------------------------------------------------------------------------------------------------
 '''
-def calculateEarthWorks(trackerPath, TerrainMesh, offsetup = 200, offsetdown = 200):
-    import MeshPart as mp
 
+
+def calculateEarthWorks(trackerPath, Terrain, offsetup=200, offsetdown=200):
     Cuts = None
     Fills = None
+    newPath = None
 
     limitTop = makeOffset(trackerPath, offsetup)
-    limitTop.Label = trackerPath.Label + "_LimitTop"
-    limitTop.ViewObject.LineColor = (1.00, 0.00, 0.00)
-
     limitBottom = makeOffset(trackerPath, -offsetdown)
-    limitBottom.Label = trackerPath.Label + "_LimitBotton"
-    limitBottom.ViewObject.LineColor = (0.00,0.33,1.00)
 
+    points3D = []
+    if Terrain.isDerivedFrom("Part::Feature"):
+        if True:
+            tmp_pts = Terrain.Shape.makeParallelProjection(trackerPath.Shape.Wires[0], FreeCAD.Vector(0, 0, 1))
+        else:
+            tmp_pts = Terrain.Shape.project([trackerPath.Shape.Wires[0], ])
+        points3D = [ver.Point for ver in tmp_pts.Vertexes]
+    elif Terrain.isDerivedFrom("Mesh::Feature"):
+        import MeshPart as mp
+        points3D = mp.projectShapeOnMesh(trackerPath.Shape, Terrain.Mesh, FreeCAD.Vector(0, 0, 1))
 
-    #TODO: Cambiar esto para asegurarse de que tenga todos los puntos
-    points3D = mp.projectShapeOnMesh(trackerPath.Shape, TerrainMesh.Mesh, FreeCAD.Vector(0, 0, 1))
-    PointList = []
-    for pl in points3D:
-        PointList += pl
-    realPath = Draft.makeWire(PointList, closed=False, face=None, support=None)
+    points3D = sorted(points3D, key=lambda k: k.y, reverse=True)
+    terrainProfile = Part.makePolygon(points3D)
+    #Part.show(terrainProfile)
 
-    PointList = realPath.Points.copy()
-    realPath.Label = trackerPath.Label + "_realPath"
-    FreeCAD.activeDocument().recompute()
-
-    sectionTop = realPath.Shape.section(limitTop.Shape)
+    sectionTop = terrainProfile.section(limitTop)
     crossTopPoints = VertexesToPoints(sectionTop.Vertexes)
-    cutPoints, PointList = getCuts(crossTopPoints, PointList)
-    for i in cutPoints:
-        Cuts = Draft.makeWire(i, closed=True, face=None, support=None)
-        Cuts.Label = "CutSections"
-        Cuts.ViewObject.LineColor = (1.00, 0.00, 0.00)
-        Cuts.ViewObject.ShapeColor = (1.00, 0.00, 0.00)
+    cutPoints, PointList = getCuts(crossTopPoints, points3D)
 
-    sectionBottom = realPath.Shape.section(limitBottom.Shape)
+    #### Prueba:
+    '''
+    lT = Part.Wire([limitTop.Vertexes[0].Point, limitTop.Vertexes[1].Point])
+    tP = Part.Wire(points3D)
+    '''
+
+
+    Cuts = []
+    for i in cutPoints:
+        Cuts.extend(i)
+        '''
+        Cut = Draft.makeWire(i, closed=True, face=None, support=None)
+        Cut.Label = "CutSections"
+        Cut.ViewObject.LineColor = (1.00, 0.00, 0.00)
+        Cut.ViewObject.ShapeColor = (1.00, 0.00, 0.00)
+        Cuts.append(Cut)
+        '''
+
+    sectionBottom = terrainProfile.section(limitBottom)
     crossBottomPoints = VertexesToPoints(sectionBottom.Vertexes)
     fillPoints, PointList = getCuts(crossBottomPoints, PointList)
+
+    Fills = []
     for i in fillPoints:
-        Fills = Draft.makeWire(i, closed=True, face=None, support=None)
-        Fills.Label = "FillSections"
-        Fills.ViewObject.LineColor = (0.00,0.33,1.00)
-        Fills.ViewObject.ShapeColor = (0.00,0.33,1.00)
+        Fills.extend(i)
+        '''
+        Fill = Draft.makeWire(i, closed=True, face=None, support=None)
+        Fill.Label = "FillSections"
+        Fill.ViewObject.LineColor = (0.00, 0.33, 1.00)
+        Fill.ViewObject.ShapeColor = (0.00, 0.33, 1.00)
+        Fills.append(Fill)
+        '''
 
-    PointList = sorted(PointList, key=lambda k: k.y, reverse = (trackerPath.End.y < trackerPath.Start.y))
-    newPath = Draft.makeWire(PointList, closed=False, face=None, support=None)
-    newPath.Label = trackerPath.Label + "_NewPath"
-
-    FreeCAD.ActiveDocument.removeObject(limitTop.Name)
-    FreeCAD.ActiveDocument.removeObject(limitBottom.Name)
-    FreeCAD.activeDocument().recompute()
+    PointList = sorted(PointList, key=lambda k: k.y, reverse=(trackerPath.Shape.Vertexes[-1].Point.y <
+                                                              trackerPath.Shape.Vertexes[0].Point.y))
+    #newPath = Draft.makeWire(PointList, closed=False, face=None)
+    #newPath.Label = trackerPath.Label + "_NewPath"
 
     return Cuts, Fills, newPath
 
 
-def makeMesh(Points, MaxlengthLE = 10000):
+def makeMesh(Points, MaxlengthLE=10000):
     def MaxLength(P1, P2, P3, MaxlengthLE):
 
         new = False
@@ -206,22 +233,10 @@ def makeMesh(Points, MaxlengthLE = 10000):
             return True
 
     import numpy as np
-    import scipy.spatial
+    from scipy.spatial import Delaunay
 
-    # Normalize points
-    fpoint = Points[0]
-    nbase = fpoint # FreeCAD.Vector(fpoint[0], fpoint[1], fpoint[2])
-    # scale_factor = FreeCAD.Vector(base.x / 1677.7216, base.y / 1677.7216, base.Z / 1677.7216)
-    # nbase = scale_factor.multiply(1677.7216)
-
-    data = []
-    for point in Points:
-        data.append([point.x - nbase.x, point.y - nbase.y, point.z - nbase.z])
-    Data = np.array(data)
-    del data
-
-    # Create delaunay triangulation
-    tri = scipy.spatial.Delaunay(Data[:, :2])
+    Data = np.array(Points)
+    tri = Delaunay(Data)
 
     MeshList = []
     for i in tri.vertices:
@@ -234,42 +249,54 @@ def makeMesh(Points, MaxlengthLE = 10000):
             MeshList.append(Data[first])
             MeshList.append(Data[second])
             MeshList.append(Data[third])
-        elif MaxLength(Data[first], Data[second], Data[third], MaxlengthLE):# \
-                #and self.MaxAngle(Data[first], Data[second], Data[third]):
+        elif MaxLength(Data[first], Data[second], Data[third], MaxlengthLE):  # \
+            # and self.MaxAngle(Data[first], Data[second], Data[third]):
             MeshList.append(Data[first])
             MeshList.append(Data[second])
             MeshList.append(Data[third])
 
     import Mesh
     MeshObject = Mesh.Mesh(MeshList)
-    MeshObject.Placement.move(nbase)
+
+    #MeshObject.Placement.move(nbase)
     Surface = FreeCAD.ActiveDocument.addObject("Mesh::Feature")
     Surface.Mesh = MeshObject
     return Surface
 
-def functiontmp():
-        import PVPlantPlacement
-        import PVPlantCreateTerrainMesh as ctm
 
-        sel = FreeCADGui.Selection.getSelection()
-        terrain = PVPlantPlacement.getTerrain()
+# TODO: Make it a form to setup all the variables:
+def _EarthWorksTaskPanel():
+    from datetime import datetime
+    starttime = datetime.now()
 
-        Cuts = []
-        Fills = []
-        newPaths = []
-        for obj in sel:
-            cut, fill, newpath = calculateEarthWorks(obj, terrain)
-            if not (cut is None):
-                Cuts.append(cut.Points)
-            if not (fill is None):
-                Fills.append(fill.Points)
+    FreeCAD.ActiveDocument.openTransaction("Calculate EarthWorks")
+
+    sel = FreeCADGui.Selection.getSelection()
+    # TODO: check if selection objects are frames and get their placement axis
+
+    terrain = FreeCAD.ActiveDocument.Site.Terrain
+
+    Cuts = []
+    Fills = []
+    newPaths = []
+    for obj in sel:
+        cut, fill, newpath = calculateEarthWorks(obj, terrain)
+        if not (cut is None):
+            Cuts.extend(cut)
+        '''
+        if not (fill is None):
+            Fills.append(fill.Points)
+            makeMesh(pointsfromlines(Fills))
+        if not (newpath is None):
             newPaths.append(newpath.Points)
+            makeMesh(pointsfromlines(newPaths), 0)
+        '''
+    makeMesh(Cuts)
+    FreeCAD.activeDocument().recompute()
 
-        makeMesh(pointsfromlines(Cuts))
-        makeMesh(pointsfromlines(Fills))
-        makeMesh(pointsfromlines(newPaths), 0)
+    total_time = datetime.now() - starttime
+    print(" -- Tiempo tardado:", total_time)
 
-        FreeCAD.activeDocument().recompute()
 
 def pointsfromlines(paths):
     points = []
@@ -277,7 +304,6 @@ def pointsfromlines(paths):
         for point in path:
             points.append(point)
     return points
-
 
 
 class _CommandCalculateEarthworks:
@@ -289,7 +315,7 @@ class _CommandCalculateEarthworks:
                 'ToolTip': QT_TRANSLATE_NOOP("Placement", "Calcular el movimiento de tierras")}
 
     def Activated(self):
-        functiontmp()
+        _EarthWorksTaskPanel()
 
     def IsActive(self):
         if FreeCAD.ActiveDocument:

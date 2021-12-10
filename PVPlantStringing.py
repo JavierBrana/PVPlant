@@ -54,8 +54,11 @@ def makeStringSetup():
     _StringSetup(obj)
     _ViewProviderStringSetup(obj.ViewObject)
 
-    if FreeCAD.ActiveDocument.StringsSetup:
-        FreeCAD.ActiveDocument.StringsSetup.addObject(obj)
+    try:
+        if FreeCAD.ActiveDocument.StringsSetup:
+            FreeCAD.ActiveDocument.StringsSetup.addObject(obj)
+    except:
+        pass
 
     FreeCAD.ActiveDocument.recompute()
 
@@ -85,17 +88,6 @@ class _StringSetup:
             obj.setEditorMode("NumberOfStrings", 1)
 
         self.Type = "StringSetup"
-
-    def addString(self, modulelist):
-        stringName = "String" + str(self.StringCount)
-        self.obj.addProperty("App::PropertyIntegerList",
-                             stringName,
-                             "Setup",
-                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                             )
-        setattr(self.obj, stringName, modulelist)
-        self.obj.NumberOfStrings = self.StringCount
-        self.StringCount += 1
 
         '''
         ['App::PropertyBool', 
@@ -180,6 +172,27 @@ class _StringSetup:
          'Mesh::PropertyCurvatureList', 
          'Mesh::PropertyMeshKernel']
          '''
+
+    def addString(self, modulelist):
+        stringName = "String" + str(self.StringCount)
+        self.obj.addProperty("App::PropertyIntegerList",
+                             stringName,
+                             "Setup",
+                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                             )
+        setattr(self.obj, stringName, modulelist)
+
+        '''
+        self.obj.addProperty("App::PropertyInteger",
+                             stringName + "_Power",
+                             "Outputs",
+                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                             )
+        '''
+        #setattr(self.obj, stringName + "_Power", len(modulelist) * 450)
+        self.obj.NumberOfStrings = self.StringCount
+        self.StringCount += 1
+
 
 class _ViewProviderStringSetup:
     def __init__(self, vobj):
