@@ -59,6 +59,7 @@ def makePlacement():
     _ViewProviderPlacement(obj.ViewObject)
     return obj
 
+
 class _Placement:
     def __init__(self, obj):
         self.setCommonProperties(obj)
@@ -76,7 +77,6 @@ class _Placement:
             obj.setEditorMode("NumberOfStrings", 1)
 
         self.Type = "StringSetup"
-
 
         '''
         ['App::PropertyBool', 
@@ -173,6 +173,7 @@ class _Placement:
         self.obj.NumberOfStrings = self.StringCount
         self.StringCount += 1
 
+
 class _ViewProviderPlacement:
     def __init__(self, vobj):
         '''
@@ -194,6 +195,7 @@ class _ViewProviderPlacement:
         '''
 
         return str(os.path.join(DirIcons, "stringsetup.svg"))
+
     '''
     def claimChildren(self):
         """
@@ -238,7 +240,7 @@ class _ViewProviderPlacement:
         """
         return None
 
-    def __setstate__(self,state):
+    def __setstate__(self, state):
         """
         Get variables from file.
         """
@@ -518,7 +520,6 @@ class _PVPlantPlacementTaskPanel:
             MechanicalGroup = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup", 'Frames')
             MechanicalGroup.Label = "Frames"
 
-
         for point in pl:
             newrack = FreeCAD.ActiveDocument.copyObject(self.Rack)
             newrack.Label = "Tracker"
@@ -535,8 +536,8 @@ class _PVPlantPlacementTaskPanel:
         starttime = datetime.now()
 
         gap_col = FreeCAD.Units.Quantity(self.form.editGapCols.text()).Value
-        gap_row = FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value + max(self.Rack.Shape.BoundBox.XLength,
-                                                                                   self.Rack.Shape.BoundBox.YLength)
+        gap_row = FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value + \
+                  max(self.Rack.Shape.BoundBox.XLength, self.Rack.Shape.BoundBox.YLength)
         offset_x = FreeCAD.Units.Quantity(self.form.editOffsetHorizontal.text()).Value
         offset_y = FreeCAD.Units.Quantity(self.form.editOffsetVertical.text()).Value
 
@@ -581,13 +582,15 @@ class _PVPlantPlacementTaskPanel:
             if (self.form.editColCount.value() > 0):
                 xlen = len(pointsx)
                 count = self.form.editColCount.value()
-                val = FreeCAD.Units.Quantity(self.form.editColGap.text()).Value - (gap_col - min(self.Rack.Shape.BoundBox.XLength,self.Rack.Shape.BoundBox.YLength))
+                val = FreeCAD.Units.Quantity(self.form.editColGap.text()).Value - (
+                            gap_col - min(self.Rack.Shape.BoundBox.XLength, self.Rack.Shape.BoundBox.YLength))
                 while count <= xlen:
                     for i, point in enumerate(pointsx):
                         if i >= count:
                             pointsx[i] += val
                     count += self.form.editColCount.value()
 
+            '''
             if (self.form.editRowCount.value() > 0):
                 ylen = len(pointsy)
                 count = self.form.editRowCount.value()
@@ -597,6 +600,7 @@ class _PVPlantPlacementTaskPanel:
                         if i >= count:
                             pointsy[i] -= val
                     count += self.form.editRowCount.value()
+            '''
 
         pl = []
         for x in pointsx:
@@ -667,7 +671,8 @@ class _PVPlantPlacementTaskPanel:
             if (self.form.editColCount.value() > 0):
                 xlen = len(pointsx)
                 count = self.form.editColCount.value()
-                val = FreeCAD.Units.Quantity(self.form.editColGap.text()).Value - (gap_col - min(self.Rack.Shape.BoundBox.XLength,self.Rack.Shape.BoundBox.YLength))
+                val = FreeCAD.Units.Quantity(self.form.editColGap.text()).Value - (
+                            gap_col - min(self.Rack.Shape.BoundBox.XLength, self.Rack.Shape.BoundBox.YLength))
                 while count <= xlen:
                     for i, point in enumerate(pointsx):
                         if i >= count:
@@ -715,14 +720,11 @@ class _PVPlantPlacementTaskPanel:
         else:
             placements = self.calculateNonAlignedArray()
 
-
         # last step: ------------------------------
-        #self.createFrameFromPoints(placements)
+        # self.createFrameFromPoints(placements)
 
         FreeCADGui.Control.closeDialog()
         return True
-
-
 
 
 # -----------------------------------------------------------------------------------------------------------------------
@@ -781,7 +783,7 @@ def adjustToTerrain(frames):
                 else:
                     for ind in range(len(points) - 1):
                         line = Part.LineSegment(points[ind], points[ind + 1])
-                        tmp = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0,0,1))
+                        tmp = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
                         if len(tmp.Vertexes) > 0:
                             if ind == 0:
                                 points3D.append(tmp.Vertexes[0].Point)
@@ -792,7 +794,7 @@ def adjustToTerrain(frames):
                 vec = points3D[ind] - points3D[ind + 1]
                 angle = math.degrees(vec.getAngle(FreeCAD.Vector(0, 1, 0)))
                 angle1 = math.degrees(vec.getAngle(FreeCAD.Vector(0, 0, 1)))
-                #print(angle, " - ", angle1)
+                # print(angle, " - ", angle1)
                 if angle > 90:
                     angle = angle - 180
                 if vec.z < 0:
@@ -803,6 +805,7 @@ def adjustToTerrain(frames):
                 frame.Placement.Rotation = FreeCAD.Rotation(0, 0, angle)
 
     FreeCAD.activeDocument().recompute()
+
 
 def getAxis(sel):
     site = FreeCAD.ActiveDocument.Site.Terrain.Shape
@@ -936,7 +939,7 @@ def getCols(sel, tolerance=2000):
         newsel = []
         for obj1 in sel:
             if obj1.Shape.BoundBox.isCutPlane(p, n):
-            #if obj1.Shape.Placement.Base.x == p.x: # TODO: Check this
+                # if obj1.Shape.Placement.Base.x == p.x: # TODO: Check this
                 col.append(obj1)
             else:
                 newsel.append(obj1)
@@ -1104,7 +1107,7 @@ class _CommandAdjustToTerrain:
     def Activated(self):
         sel = FreeCADGui.Selection.getSelection()
         if len(sel) > 0:
-            #AdjustToTerrain_V1(sel)
+            # AdjustToTerrain_V1(sel)
             # AdjustToTerrain__(sel)
             adjustToTerrain(sel)
         else:

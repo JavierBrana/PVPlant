@@ -20,9 +20,11 @@
 # *                                                                     *
 # ***********************************************************************
 
-import FreeCAD, Draft
+import FreeCAD, Draft, Part
+import BOPTools.SplitAPI as splitter
 import ArchComponent
 import PVPlantSite
+import math
 import copy
 
 if FreeCAD.GuiUp:
@@ -31,7 +33,6 @@ if FreeCAD.GuiUp:
     from DraftTools import translate
     from PySide.QtCore import QT_TRANSLATE_NOOP
 
-    import Part
     from pivy import coin
     import os
 else:
@@ -58,10 +59,11 @@ def makePad(base=None):
     _ViewProviderPad(obj.ViewObject)
     obj.Base = base
 
+    '''
     if FreeCAD.ActiveDocument.Pads:
         FreeCAD.ActiveDocument.Pads.addObject(obj)
+    '''
 
-    FreeCAD.ActiveDocument.recompute()
     return obj
 
 
@@ -76,7 +78,7 @@ class _Pad(ArchComponent.Component):
         self.Type = "Pad"
 
         obj.Proxy = self
-        obj.IfcType = "Civil Element"  ## puede ser: Cable Carrier Segment
+        obj.IfcType = "Civil Element"
         obj.setEditorMode("IfcType", 1)
 
 
@@ -164,7 +166,6 @@ class _Pad(ArchComponent.Component):
 
 
         #TODO: Los parametros width y length desaparecerán. Se tiene que selecionar objeto base
-        ##if not obj.Base:
         obj.addProperty("App::PropertyLength",
                         "Width",
                         "Pad",
@@ -176,9 +177,9 @@ class _Pad(ArchComponent.Component):
                         QT_TRANSLATE_NOOP("App::Property", "Connection")).Length = 10000
 
         obj.addProperty("App::PropertyAngle",
-                        "EmbankmentSlope",
+                        "FillSlope",
                         "Pad",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).EmbankmentSlope = 25.00
+                        QT_TRANSLATE_NOOP("App::Property", "Connection")).FillSlope = 45.00
 
         obj.addProperty("App::PropertyAngle",
                         "CutSlope",
@@ -246,9 +247,12 @@ class _Pad(ArchComponent.Component):
         '''
 
     def execute(self, obj):
-        import Part
+        from datetime import datetime
+        starttime = datetime.now()
 
-        pl = obj.Placement.Base
+        pb = obj.Placement.Base
+        pr = obj.Placement.Rotation
+        land = PVPlantSite.get().Terrain
         shapes = []
         pad = None
 
@@ -257,43 +261,57 @@ class _Pad(ArchComponent.Component):
                 pad = obj.Base.Shape.Wires[0]
             elif obj.Base.Shape.Edges:
                 pad = Part.Wire(obj.Base.Shape.Edges)
-            pl = obj.Base.Placement.Base
+            pb = obj.Base.Placement.Base
         else:
             # Si no hay una base seleccionada se crea una rectangular:
             halfWidth = obj.Width.Value / 2
             halfLength = obj.Length.Value / 2
 
             p1 = FreeCAD.Vector(-halfLength, -halfWidth, 0)
-            p2 = FreeCAD.Vector(halfLength, -halfWidth, 0)
-            p3 = FreeCAD.Vector(halfLength, halfWidth, 0)
-            p4 = FreeCAD.Vector(-halfLength, halfWidth, 0)
+            p2 = FreeCAD.Vector( halfLength, -halfWidth, 0)
+            p3 = FreeCAD.Vector( halfLength,  halfWidth, 0)
+            p4 = FreeCAD.Vector(-halfLength,  halfWidth, 0)
             pad = Part.makePolygon([p1, p2, p3, p4, p1])
-            pad.Placement.Base = pl
 
         # 1. Terraplén (embankment / fill):
-        fill = self.createSolid(obj, pad, 0)
-        #fill.Placement.Base += pl
-        fillcommon, fill = self.calculateFill(obj, fill)
+        fill = None
+        fillcommon = None
+        if land.Shape.BoundBox.ZMin < pb.z:
+            print("- PAD: Calcalete fill solid:")
+            fill = self.createSolid(obj, pad, land, -1)
+            fill.Placement.Base += pb
+            print("-- Fill: ", fill)
+            fillcommon, fill = self.calculateFill(obj, fill)
+            print("--- Fill: ", fill)
+        else:
+            print("- PAD: NOOOO  Calcalete fill solid:")
 
         # 2. Desmonte (cut):
-        cut = self.createSolid(obj, pad, 1)
-        #cut.Placement.Base += pl
-        cutcommon, cut = self.calculateCut(obj, cut)
+        cut = None
+        cutcommon = None
+        if land.Shape.BoundBox.ZMax > pb.z:
+            print("- PAD: Calcalete cut solid:")
+            cut = self.createSolid(obj, pad, land, 1)
+            cut.Placement.Base += pb
+            print("-- Cut: ", cut)
+            cutcommon, cut = self.calculateCut(obj, cut)
+            print("--- Cut: ", cut)
+        else:
+            print("- PAD: NOOOO Calcalete cut solid:")
 
         topsoilArea = 0
         topsoilVolume = 0
-        pad = Part.Face(pad)
-        shapes.append(pad)
         if fill:
-            #fill.Placement.Base -= pl
-            shapes.append(fill)
-            topsoilArea += fill.Area
             if obj.TopsoilCalculation:
                 filltopsoil = fillcommon.extrude(FreeCAD.Vector(0, 0, -obj.TopsoilHeight))
                 topsoilVolume += filltopsoil.Volume
+                filltopsoil.Placement.Base -= pb
                 shapes.append(filltopsoil)
+            fill.Placement.Base -= pb
+            shapes.append(fill)
+            topsoilArea += fill.Area
         if cut:
-            #cut.Placement.Base -= pl
+            cut.Placement.Base -= pb
             shapes.append(cut)
             topsoilArea += cut.Area
             if obj.TopsoilCalculation:
@@ -301,62 +319,54 @@ class _Pad(ArchComponent.Component):
                 topsoilVolume += cuttopsoil.Volume
                 self.obj.CutVolume = self.obj.CutVolume.Value - cuttopsoil.Volume
 
+        pad = Part.Face(pad)
+        if len(shapes) == 0:
+            shapes.append(pad)
+
         obj.Shape = Part.makeCompound(shapes)
         self.obj.PadArea = pad.Area
         self.obj.TopSoilArea = topsoilArea
         self.obj.TopSoilVolume = topsoilVolume
 
-    def createSolid(self, obj, base, dir = 0):
-        import math
+        total_time = datetime.now() - starttime
+        print(" -- Tiempo tardado:", total_time)
 
-        land = PVPlantSite.get().Terrain
+    def createSolid(self, obj, base, land, dir = -1):
+        zz = .0
+        angle = .0
+        height = .0
+        if dir == -1:
+            zz = land.Shape.BoundBox.ZMin
+            angle = obj.FillSlope.Value
+        else:
+            zz = land.Shape.BoundBox.ZMax
+            angle = obj.CutSlope.Value
+        height = abs(zz - obj.Placement.Base.z)
 
-        zz = land.Shape.BoundBox.ZMin if dir == 0 else land.Shape.BoundBox.ZMax
-        height = abs(zz - base.Placement.Base.z)
-        angle = obj.EmbankmentSlope.Value if dir == 0 else obj.CutSlope.Value
+        offset = base.makeOffset2D(height / math.tan(math.radians(angle)), join=0)
+        offset.Placement.Base = base.Placement.Base + FreeCAD.Vector(0, 0, zz - obj.Placement.Base.z)
 
-        offset = base.makeOffset2D((height - 10) / math.tan(math.radians(angle)), join=0)
-        offset.Placement.Base.z = zz
+        if False: # old code
+            offset1 = base.makeOffset2D(10 / math.tan(math.radians(angle)), join=0)
+            offset1.Placement.Base = base.Placement.Base + FreeCAD.Vector(0, 0, 10 * dir)
 
-        offset1 = base.Wires[0].makeOffset2D(10 / math.tan(math.radians(angle)), join=0)
-        offset1.Placement.Base.z = base.Placement.Base.z + (-10 if dir == 0 else 10)
-
-        loft1 = Part.makeLoft([base, offset1], True)
-        loft2 = Part.makeLoft([offset1, offset], True)
-        solid = loft1.fuse(loft2)
-
-        ''' old code. Only for rectagle pad:
-        faces = []
-        faces.append(Part.Face(base))
-        faces.append(Part.Face(offset))
-        count = -1
-        lines = []
-        for vertex in base.Vertexes:
-            for i in range(2):
-                lines.append(Part.LineSegment(vertex.Point, offset.Vertexes[count].Point))
-                count += 1
-
-        count = -1
-        count1 = 0
-        for i in range(len(lines)):
-            if i % 2 == 0:
-                line = lines[i].toShape()
-                faces.append(line.revolve(line.Vertexes[0].Point, FreeCAD.Vector(0, 0, 1), 90))
+            loft1 = Part.makeLoft([base, offset1, offset], True, True)
+            if False:
+                return loft1
             else:
-                faces.append(Part.makeLoft([base.Edges[count1], offset.Edges[count]]))
-                count1 += 1
-            count += 1
+                loft2 = Part.makeLoft([offset1, offset], True, True)
+                print(" ---loft1: ", loft1)
+                print(" ---loft2: ", loft2)
+                return loft1.fuse([loft2, ])
+        else:
+            import DraftGeomUtils
+            base_fillet = DraftGeomUtils.filletWire(base, 1) #trip to get a nice shape: (fillet of 1 mm)
+            return Part.makeLoft([base_fillet, offset], True)
 
-        solid = Part.makeSolid(Part.makeShell(Part.makeCompound(faces).Faces))
-        '''
-        return solid
 
     def calculateFill(self, obj, solid):
-        import BOPTools.SplitAPI as splitter
-
         common = solid.common(PVPlantSite.get().Terrain.Shape)
         if common.Area > 0:
-            #topsoil = common.extrude(FreeCAD.Vector(0, 0, -obj.TopsoilHeight))
             sp = splitter.slice(solid, [common, ], "Split")
             commoncopy = common.copy()
             commoncopy.Placement.Base.z += 10
@@ -369,23 +379,18 @@ class _Pad(ArchComponent.Component):
                     fills.append(sol)
             obj.FillVolume = volume
             if len(fills) > 0:
-                '''
-                base = fills[0]
-                for i in range(1, len(fills)):
-                    base = base.fuse(fills[i])
-                '''
                 base = fills.pop(0)
                 if len(fills) > 0:
                     base = base.fuse(fills)
                 return common, base
+        else:
+            obj.FillVolume = 0
+            print("--- Fill: no common Area --------------------------")
         return None, None
 
     def calculateCut(self, obj, solid):
-        import BOPTools.SplitAPI as splitter
-
         common = solid.common(PVPlantSite.get().Terrain.Shape)
         if common.Area > 0:
-            #Part.show(common.extrude(FreeCAD.Vector(0, 0, -obj.TopsoilHeight)))
             sp = splitter.slice(solid, [common, ], "Split")
             shells = []
             volume = 0
@@ -400,15 +405,14 @@ class _Pad(ArchComponent.Component):
                     shells.append(shell)
             obj.CutVolume = volume
             if len(shells) > 0:
-                '''
-                base = shells[0]
-                for i in range(1, len(shells)):
-                    base = base.fuse(shells[i])
-                '''
                 base = shells.pop(0)
                 if len(shells) > 0:
                     base = base.fuse(shells)
                 return common, base
+        else:
+            obj.CutVolume = 0
+            print("--- Cut: no common Area --------------------------")
+
         return None, None
 
 class _ViewProviderPad(ArchComponent.ViewProviderComponent):
@@ -417,7 +421,7 @@ class _ViewProviderPad(ArchComponent.ViewProviderComponent):
 
     def getIcon(self):
         return str(os.path.join(PVPlantResources.DirIcons, "slope.svg"))
-
+"""
     def attach(self, vobj):
         '''
         Create Object visuals in 3D view.
@@ -463,8 +467,6 @@ class _ViewProviderPad(ArchComponent.ViewProviderComponent):
         '''
         Update Object visuals when a data property changed.
         '''
-        print("+ UpdateData")
-        print("+--- Propiedad: ", prop)
         origin = PVPlantSite.get()
         base = copy.deepcopy(origin.Origin)
         base.z = 0
@@ -479,7 +481,7 @@ class _ViewProviderPad(ArchComponent.ViewProviderComponent):
             geo_system = ["UTM", origin.UtmZone, "FLAT"]
             self.geo_coords.geoSystem.setValues(geo_system)
             self.geo_coords.point.values = points
-
+"""
 
 
 class _PadTaskPanel:
@@ -496,6 +498,7 @@ class _PadTaskPanel:
         self.form = FreeCADGui.PySideUic.loadUi(os.path.join(PVPlantResources.__dir__, "PVPlantTrench.ui"))
 
     def accept(self):
+        FreeCAD.ActiveDocument.openTransaction("Create Pad")
         FreeCADGui.Control.closeDialog()
         return True
 
