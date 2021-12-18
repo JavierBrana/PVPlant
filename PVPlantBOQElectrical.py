@@ -59,6 +59,13 @@ from openpyxl.styles import Alignment, Border, Side, PatternFill, GradientFill, 
 def makeBOQElectrical():
     ''' create a excel '''
 
+    import PVPlantUtils
+    line = FreeCADGui.Selection.getSelection()[0]
+    tmp = PVPlantUtils.makeProfileFromTerrein(line.Shape)
+    tmp = PVPlantUtils.FlattenWire(tmp)
+    Part.show(tmp)
+
+    return
 
 
     ''' tmp: probar a exportar a excel - hacer el layout en excel'''

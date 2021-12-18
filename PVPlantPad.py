@@ -75,11 +75,12 @@ class _Pad(ArchComponent.Component):
         self.base = None
 
         self.setProperties(obj)
-        self.Type = "Pad"
 
         obj.Proxy = self
         obj.IfcType = "Civil Element"
         obj.setEditorMode("IfcType", 1)
+
+        obj.ViewObject.ShapeColor = (0.305, 0.230, 0.191)
 
 
     def setProperties(self, obj):
@@ -227,6 +228,9 @@ class _Pad(ArchComponent.Component):
                         QT_TRANSLATE_NOOP("App::Property", "Connection"))
         obj.setEditorMode("TopSoilVolume", 1)
 
+        self.Type = "Pad"
+        obj.Proxy = self
+
     def onDocumentRestored(self, obj):
         """Method run when the document is restored.
         Re-adds the Arch component, and object properties."""
@@ -317,16 +321,16 @@ class _Pad(ArchComponent.Component):
             if obj.TopsoilCalculation:
                 cuttopsoil = cutcommon.extrude(FreeCAD.Vector(0, 0, -obj.TopsoilHeight))
                 topsoilVolume += cuttopsoil.Volume
-                self.obj.CutVolume = self.obj.CutVolume.Value - cuttopsoil.Volume
+                obj.CutVolume = obj.CutVolume.Value - cuttopsoil.Volume
 
         pad = Part.Face(pad)
         if len(shapes) == 0:
             shapes.append(pad)
 
         obj.Shape = Part.makeCompound(shapes)
-        self.obj.PadArea = pad.Area
-        self.obj.TopSoilArea = topsoilArea
-        self.obj.TopSoilVolume = topsoilVolume
+        obj.PadArea = pad.Area
+        obj.TopSoilArea = topsoilArea
+        obj.TopSoilVolume = topsoilVolume
 
         total_time = datetime.now() - starttime
         print(" -- Tiempo tardado:", total_time)
@@ -362,7 +366,6 @@ class _Pad(ArchComponent.Component):
             import DraftGeomUtils
             base_fillet = DraftGeomUtils.filletWire(base, 1) #trip to get a nice shape: (fillet of 1 mm)
             return Part.makeLoft([base_fillet, offset], True)
-
 
     def calculateFill(self, obj, solid):
         common = solid.common(PVPlantSite.get().Terrain.Shape)

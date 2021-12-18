@@ -43,6 +43,7 @@ class PVPlantWorkbench (Workbench):
             PVPlantStringBox, PVPlantCable, PVPlantStringing, \
             PVPlantPad, PVPlantRoad, PVPlantTerrain, PVPlantArea, \
             exportDXF, exportPVSyst, PVPlantBOQMechanical, PVPlantBOQElectrical, PVPlantBOQCivil,\
+            GraphProfile, \
             reload
 
         # A list of command names created in the line above
@@ -58,6 +59,7 @@ class PVPlantWorkbench (Workbench):
                      "PVPlantEarthworks",
                      "PVPlantPad",
                      "PVPlantRoad",
+                     "GraphTerrainProfile",
                      ]
         self.list1 = [
                      "RackType",

@@ -59,9 +59,6 @@ def makeStringSetup():
             FreeCAD.ActiveDocument.StringsSetup.addObject(obj)
     except:
         pass
-
-    FreeCAD.ActiveDocument.recompute()
-
     return obj
 
 class _StringSetup:

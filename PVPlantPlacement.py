@@ -790,6 +790,7 @@ def adjustToTerrain(frames):
                             points3D.append(tmp.Vertexes[-1].Point)
 
             Draft.makeWire(points3D)
+
             for ind in range(0, len(points3D) - 1):
                 vec = points3D[ind] - points3D[ind + 1]
                 angle = math.degrees(vec.getAngle(FreeCAD.Vector(0, 1, 0)))
@@ -802,6 +803,7 @@ def adjustToTerrain(frames):
                 frame = group[ind]
                 p = (points3D[ind] + points3D[ind + 1]) / 2
                 frame.Placement.Base.z = p.z
+                #Todo: probar con frame.Placement.rotate()
                 frame.Placement.Rotation = FreeCAD.Rotation(0, 0, angle)
 
     FreeCAD.activeDocument().recompute()
@@ -857,7 +859,7 @@ def AdjustToTerrain_V0(frames):
             p2 = FreeCAD.Vector(frame.Shape.BoundBox.XMax, frame.Shape.BoundBox.Center.y, 0.0)
         else:
             p1 = FreeCAD.Vector(frame.Shape.BoundBox.Center.x, frame.Shape.BoundBox.YMin, 0.0)
-            p2 = FreeCAD.Vector(frame.Shape.BoundBox.Center.x, frame.Shape.BoundBox.YMax, 0.0)
+            p2 = FreeCAD.Vector(frame.Shape.BoundBowirex.Center.x, frame.Shape.BoundBox.YMax, 0.0)
 
         l = Part.LineSegment()
         l.StartPoint = p1

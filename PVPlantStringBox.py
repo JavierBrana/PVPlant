@@ -23,7 +23,6 @@
 import FreeCAD
 import ArchComponent
 import Part
-import Draft
 
 if FreeCAD.GuiUp:
     import FreeCADGui, os

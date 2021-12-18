@@ -25,6 +25,7 @@ import ArchComponent
 import Part
 import PVPlantSite
 import copy
+import numpy as np
 
 if FreeCAD.GuiUp:
     import FreeCADGui
@@ -200,10 +201,7 @@ class _Terrain(ArchComponent.Component):
         '''Do something when a property has changed'''
         if prop == "DEM" or prop == "CuttingBoundary":
             if obj.DEM and obj.CuttingBoundary:
-                import numpy as np
-
                 grid_space = 1
-
                 file = open(obj.DEM, "r")
                 templist = [line.split() for line in file.readlines()]
                 file.close()
@@ -236,6 +234,18 @@ class _Terrain(ArchComponent.Component):
                 inc_x = obj.CuttingBoundary.Shape.BoundBox.XLength * 0.0
                 inc_y = obj.CuttingBoundary.Shape.BoundBox.YLength * 0.0
 
+                tmp = np.where(np.logical_and(x >= (obj.CuttingBoundary.Shape.BoundBox.XMin - inc_x) / 1000,
+                                              x <= (obj.CuttingBoundary.Shape.BoundBox.XMax + inc_x) / 1000))[0]
+                max_x = np.ndarray.max(tmp)
+                min_x = np.ndarray.min(tmp)
+
+                tmp = np.where(np.logical_and(y >= (obj.CuttingBoundary.Shape.BoundBox.YMin - inc_y) / 1000,
+                                              y <= (obj.CuttingBoundary.Shape.BoundBox.YMax + inc_y) / 1000))[0]
+                max_y = np.ndarray.max(tmp)
+                min_y = np.ndarray.min(tmp)
+
+
+                '''
                 min_x = 0
                 max_x = 0
                 comp = (obj.CuttingBoundary.Shape.BoundBox.XMin - inc_x) / 1000
@@ -261,19 +271,11 @@ class _Terrain(ArchComponent.Component):
                     if y[i] < comp:
                         min_y = i
                         break
+                '''
 
                 x = x[min_x:max_x]
                 y = y[max_y:min_y]
                 datavals = datavals[max_y:min_y, min_x:max_x]
-
-                # 2. fine: TODO: ----
-                '''
-                bnd = PVPlantSite.get().Terrain.CuttingBoundary
-                for xx in x:
-                    for yy in y:
-                        if not bnd.Shape.isInside(FreeCAD.Vector(xx, yy, 0), True):
-                            datavals[xx][yy] = nodata_value
-                '''
 
                 # Create surface:
                 if False:  # faster but more memory 46s - 4,25 gb
@@ -314,10 +316,11 @@ class _Terrain(ArchComponent.Component):
 
         if prop == "PointsGroup" or prop == "CuttingBoundary":
             if obj.PointsGroup and obj.CuttingBoundary:
-                import numpy as np
                 bnd = obj.CuttingBoundary.Shape
                 if len(bnd.Faces) == 0:
-                    bnd = Part.Face(bnd)
+                    pts = [ver.Point for ver in bnd.Vertexes]
+                    pts.append(pts[0])
+                    bnd = Part.makePolygon(pts)
 
                 # TODO: not use the first point, else the Origin in "Site".
                 #  It is standar for everything.
@@ -344,7 +347,8 @@ class _Terrain(ArchComponent.Component):
                     obj.DEM = None
 
     def execute(self, obj):
-        print("  -----  Terrain  -  EXECUTE  ----------")
+        ''''''
+        #print("  -----  Terrain  -  EXECUTE  ----------")
 
 
 class _ViewProviderTerrain(ArchComponent.ViewProviderComponent):

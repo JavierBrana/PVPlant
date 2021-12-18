@@ -1,4 +1,5 @@
 import FreeCAD
+import Part
 
 if FreeCAD.GuiUp:
     import FreeCADGui, os
@@ -234,3 +235,35 @@ def dijsktra(graph, initial, end):
     # Reverse path
     path = path[::-1]
     return path
+
+
+def makeProfileFromTerrein(path):
+    terrain = FreeCAD.ActiveDocument.Terrain
+    points = []
+    if terrain.isDerivedFrom("Part::Feature"):
+        tmp = terrain.Shape.makeParallelProjection(path, FreeCAD.Vector(0, 0, 1))
+        points.extend([ver.Point for ver in tmp.Vertexes])
+    elif terrain.isDerivedFrom("Mesh::Feature"):
+        points.append(terrain.Mesh.BoundBox.Center)
+
+    return Part.makePolygon(points)
+
+'''
+Flatten a wire to 2 axis: X - Y
+'''
+def FlattenWire(wire):
+    pts = []
+    xx = 0
+    for i, ver in enumerate(wire.Vertexes):
+        if i == 0:
+            pts.append(FreeCAD.Vector(xx, ver.Point.z, 0))
+        else:
+            xx += (ver.Point - wire.Vertexes[i - 1].Point).Length
+            pts.append(FreeCAD.Vector(xx, ver.Point.z, 0))
+    return Part.makePolygon(pts)
+
+
+
+
+
+
