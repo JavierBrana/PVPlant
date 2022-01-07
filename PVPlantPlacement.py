@@ -173,7 +173,6 @@ class _Placement:
         self.obj.NumberOfStrings = self.StringCount
         self.StringCount += 1
 
-
 class _ViewProviderPlacement:
     def __init__(self, vobj):
         '''
@@ -245,7 +244,6 @@ class _ViewProviderPlacement:
         Get variables from file.
         """
         return None
-
 
 def calculatePlacement(globalRotation, edge, offset, RefPt, xlate,
                        normal=None, Orientation=0):
@@ -327,7 +325,6 @@ def calculatePlacement(globalRotation, edge, offset, RefPt, xlate,
     placement.Rotation = finalRotation
 
     return placement
-
 
 def calculatePlacementsOnPath(shapeRotation, pathwire, xlate, rackLength=0, Spacing=0, Orientation=0,
                               _offset_=0):
@@ -439,7 +436,6 @@ def calculatePlacementsOnPath(shapeRotation, pathwire, xlate, rackLength=0, Spac
         # del pts[:]
     return placements, pts
 
-
 def get_parameter_from_v0(edge, offset):
     """Return parameter at distance offset from edge.Vertexes[0].
     sb method in Part.TopoShapeEdge???
@@ -457,7 +453,6 @@ def get_parameter_from_v0(edge, offset):
         length = offset
     return edge.getParameterByLength(length)
 
-
 def calculateSections(frame, Placements):
     for placement in Placements:
         cp = FreeCAD.ActiveDocument.copyObject(frame, False)
@@ -465,7 +460,6 @@ def calculateSections(frame, Placements):
         cp.Placement = placement
         cp.CloneOf = frame
         del cp
-
 
 class _PVPlantPlacementTaskPanel:
     '''The editmode TaskPanel for Schedules'''
@@ -531,6 +525,15 @@ class _PVPlantPlacementTaskPanel:
         FreeCAD.ActiveDocument.Site.addObject(MechanicalGroup)
         # TODO: ajustar los tracker al terreno
 
+    def calculateWorkingArea(self):
+        Area = self.PVArea.Shape
+        ProhibitedAreas = []
+
+        if len(ProhibitedAreas) > 0:
+            return Area.cut(ProhibitedAreas)
+        else:
+            return Area
+
     def calculateAlignedArray(self):
         from datetime import datetime
         starttime = datetime.now()
@@ -542,7 +545,7 @@ class _PVPlantPlacementTaskPanel:
         offset_y = FreeCAD.Units.Quantity(self.form.editOffsetVertical.text()).Value
 
         # TODO: Chequear la forma: Ver que esté cerrada y transformarla en cara.
-        Area = self.PVArea.Shape
+        Area = self.calculateWorkingArea()
 
         rec = Part.makePlane(self.Rack.Shape.BoundBox.YLength, self.Rack.Shape.BoundBox.XLength)
         # TODO: revisar todo esto: -----------------------------------------------------------------
@@ -578,6 +581,7 @@ class _PVPlantPlacementTaskPanel:
         pointsx = np.arange(startx, Area.BoundBox.XMax, gap_col)
         pointsy = np.arange(starty, Area.BoundBox.YMin, -gap_row)
 
+        ''' # Corridors:
         if self.form.groupCorridor.isChecked():
             if (self.form.editColCount.value() > 0):
                 xlen = len(pointsx)
@@ -590,7 +594,6 @@ class _PVPlantPlacementTaskPanel:
                             pointsx[i] += val
                     count += self.form.editColCount.value()
 
-            '''
             if (self.form.editRowCount.value() > 0):
                 ylen = len(pointsy)
                 count = self.form.editRowCount.value()
@@ -600,9 +603,10 @@ class _PVPlantPlacementTaskPanel:
                         if i >= count:
                             pointsy[i] -= val
                     count += self.form.editRowCount.value()
-            '''
+        '''
 
         pl = []
+        rows = []
         for x in pointsx:
             col = []
             for y in pointsy:
@@ -616,7 +620,11 @@ class _PVPlantPlacementTaskPanel:
                         Part.show(cp)
                         col.append(cp)
                     else:
-                        col.append(None)
+                        col.append(cp)
+            if len(col)>0:
+                rows.append(col)
+
+        #adjustToTerrainFromMatrix(rows)
 
         total_time = datetime.now() - starttime
         print(" -- Tiempo tardado:", total_time)
@@ -634,7 +642,7 @@ class _PVPlantPlacementTaskPanel:
         offset_x = FreeCAD.Units.Quantity(self.form.editOffsetHorizontal.text()).Value
         offset_y = FreeCAD.Units.Quantity(self.form.editOffsetVertical.text()).Value
 
-        Area = self.PVArea.Shape
+        Area = calculateWorkingArea
 
         rec = Part.makePlane(self.Rack.Shape.BoundBox.YLength, self.Rack.Shape.BoundBox.XLength)
 
@@ -726,35 +734,41 @@ class _PVPlantPlacementTaskPanel:
         FreeCADGui.Control.closeDialog()
         return True
 
-
-# -----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 # function AdjustToTerrain
 #   Take a group of objects and adjust it to the slope and altitude of the terrain mesh. It detects the terrain mesh
 #
 #   Inputs:
 #   1. frames: group of objest to adjust
-# -----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 def adjustToTerrain(frames):
+    from datetime import datetime
+    starttime = datetime.now()
+
     terrain = PVPlantSite.get().Terrain.Shape
     cols = getCols(frames)
     for col in cols:
         for group in col:
-            frame1 = group[0]  # Norte
-            frame_1 = group[-1]  # Sur
-
+            frame1 = group[0]  # Norte / Oeste
+            frame_1 = group[-1]  # Sur / Este
             p0 = FreeCAD.Vector(frame1.Shape.BoundBox.Center.x, frame1.Shape.BoundBox.YMax, 0)
             pf = FreeCAD.Vector(frame_1.Shape.BoundBox.Center.x, frame_1.Shape.BoundBox.YMin, 0)
-
             points = []
+            vec = (pf - p0).normalize()
             points.append(p0)
             for ind in range(0, len(group) - 1):
-                middlepoint = (group[ind].Shape.BoundBox.Center + group[ind + 1].Shape.BoundBox.Center) / 2
-                points.append(middlepoint)
+                frame1 = group[ind]
+                frame2 = group[ind + 1]
+                vec1 = FreeCAD.Vector(vec)
+                vec1.Length += frame1.Width / 2
+                vec2 = FreeCAD.Vector(vec)
+                vec2.Length -= frame2.Width / 2
+                points.append(vec1 + vec2) / 2
             points.append(pf)
 
             points3D = []
 
-            if False:
+            if False: # V2 en desarrollo
                 line = Part.LineSegment(p0, pf)
                 pjt = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
                 for point in points:
@@ -767,7 +781,7 @@ def adjustToTerrain(frames):
                     print(tmp)
 
             else:
-                if False:
+                if False: # V0
                     # lot of slow
                     for point in points:
                         p1 = copy.deepcopy(point)
@@ -780,7 +794,7 @@ def adjustToTerrain(frames):
                             points3D.append(section.Vertexes[0].Point)
                         else:
                             print("No common")
-                else:
+                else: # v1
                     for ind in range(len(points) - 1):
                         line = Part.LineSegment(points[ind], points[ind + 1])
                         tmp = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
@@ -793,19 +807,28 @@ def adjustToTerrain(frames):
 
             for ind in range(0, len(points3D) - 1):
                 vec = points3D[ind] - points3D[ind + 1]
-                angle = math.degrees(vec.getAngle(FreeCAD.Vector(0, 1, 0)))
-                angle1 = math.degrees(vec.getAngle(FreeCAD.Vector(0, 0, 1)))
-                # print(angle, " - ", angle1)
-                if angle > 90:
-                    angle = angle - 180
-                if vec.z < 0:
-                    angle *= -1
-                frame = group[ind]
-                p = (points3D[ind] + points3D[ind + 1]) / 2
-                frame.Placement.Base.z = p.z
-                #Todo: probar con frame.Placement.rotate()
-                frame.Placement.Rotation = FreeCAD.Rotation(0, 0, angle)
+                if False: # V0
+                    angle = math.degrees(vec.getAngle(FreeCAD.Vector(0, 1, 0)))
+                    angle1 = math.degrees(vec.getAngle(FreeCAD.Vector(0, 0, 1)))
+                    # print(angle, " - ", angle1)
+                    if angle > 90:
+                        angle = angle - 180
+                    if vec.z < 0:
+                        angle *= -1
+                    frame = group[ind]
+                    p = (points3D[ind] + points3D[ind + 1]) / 2
+                    frame.Placement.Base.z = p.z
+                    #Todo: probar con frame.Placement.rotate()
+                    frame.Placement.Rotation = FreeCAD.Rotation(0, 0, angle)
+                else: # v1
+                    frame = group[ind]
+                    p = (points3D[ind] + points3D[ind + 1]) / 2
+                    frame.Placement.Base.z = p.z
+                    frame.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(-1, 0, 0), vec)
 
+
+    total_time = datetime.now() - starttime
+    print(" -- Tiempo tardado en ajustar al terreno:", total_time)
     FreeCAD.activeDocument().recompute()
 
 
@@ -929,23 +952,21 @@ def AdjustToTerrain_V1(frames):
     FreeCAD.activeDocument().recompute()
 
 
-def getCols(sel, tolerance=2000):
+def getCols(sel, tolerance = 2000):
     cols = []
     while len(sel) > 0:
         obj = sel[0]
         p = obj.Shape.BoundBox.Center
-        n = FreeCAD.Vector(1, 0, 0)  # TODO: detectar cual es el lado más pq
+        n = FreeCAD.Vector(1, 0, 0)  # TODO: detectar cual es el lado más pq1
 
         # 1. Detectar los objetos que están en una misma columna
         col = []
         newsel = []
         for obj1 in sel:
             if obj1.Shape.BoundBox.isCutPlane(p, n):
-                # if obj1.Shape.Placement.Base.x == p.x: # TODO: Check this
                 col.append(obj1)
             else:
                 newsel.append(obj1)
-
         sel = newsel.copy()
         col = sorted(col, key=lambda k: k.Placement.Base.y, reverse=True)  # Orden Norte - Sur (Arriba a abajo)
 
@@ -953,51 +974,47 @@ def getCols(sel, tolerance=2000):
         group = []
         newcol = []
         if len(col) > 1:
-            distances = []
-            for ind in range(0, len(col) - 1):
-                vec1 = col[ind + 1].Placement.Base
-                vec1.z = 0
-                vec2 = col[ind].Placement.Base
-                vec2.z = 0
-                distances.append((vec1 - vec2).Length)
-            distmin = tolerance
-            group.append(col[0])
-            for ind in range(0, len(col) - 1):
-                # len1 = col[ind].Shape.Edges[0].Length
-                # len2 = col[ind + 1].Shape.Edges[0].Length
-                # len3 = (col[ind + 1].Placement.Base - col[ind].Placement.Base).Length - (len1 + len2) / 2 # TODO: Cambiar esto
+            if False: # V1:
+                distances = []
+                for ind in range(0, len(col) - 1):
+                    vec1 = FreeCAD.Vector(col[ind + 1].Placement.Base)
+                    vec1.z = 0
+                    vec2 = FreeCAD.Vector(col[ind].Placement.Base)
+                    vec2.z = 0
+                    distances.append((vec1 - vec2).Length)
+            else: # v0
+                distmin = tolerance
+                group.append(col[0])
+                for ind in range(0, len(col) - 1):
+                    print(ind, " of ", len(col))
+                    ed1 = col[ind].Shape.Edges[3]
+                    ed2 = col[ind + 1].Shape.Edges[1]
+                    len3 = (ed1.valueAt(ed1.FirstParameter + 0.5 * (ed1.LastParameter - ed1.FirstParameter)) -
+                            ed2.valueAt(ed2.FirstParameter + 0.5 * (ed2.LastParameter - ed2.FirstParameter))).Length
 
-                ed1 = col[ind].Shape.Edges[3]
-                ed2 = col[ind + 1].Shape.Edges[1]
-                len3 = (ed1.valueAt(ed1.FirstParameter + 0.5 * (ed1.LastParameter - ed1.FirstParameter)) -
-                        ed2.valueAt(ed2.FirstParameter + 0.5 * (ed2.LastParameter - ed2.FirstParameter))).Length
-
-                if len3 <= distmin:
-                    group.append(col[ind + 1])
-                else:
-                    newcol.append(group.copy())
-                    group.clear()
-                    group.append(col[ind + 1])
+                    if len3 <= distmin:
+                        group.append(col[ind + 1])
+                    else:
+                        newcol.append(group.copy())
+                        group.clear()
+                        group.append(col[ind + 1])
         else:
             group.append(col[0])
 
         newcol.append(group)
         cols.append(newcol)
-    cols = sorted(cols, key=lambda k: k[0][0].Placement.Base.x,
-                  reverse=False)  # Orden Oeste - Este  (Izquierda a derecha)
+    cols = sorted(cols, key=lambda k: k[0][0].Placement.Base.x, reverse = False)
     return cols
 
 
 # -----------------------------------------------------------------------------------------------------------------------
 # Convert
-#
-#
 # -----------------------------------------------------------------------------------------------------------------------
 class _PVPlantConvertTaskPanel:
     '''The editmode TaskPanel for Conversions'''
 
     def __init__(self):
-        import os
+        import ost
 
         self.To = None
 
@@ -1101,10 +1118,10 @@ class _CommandPVPlantPlacement:
 class _CommandAdjustToTerrain:
 
     def GetResources(self):
-        return {'Pixmap': str(os.path.join(PVPlantResources.DirIcons, "way.svg")),
+        return {'Pixmap': str(os.path.join(PVPlantResources.DirIcons, "adjust.svg")),
                 'Accel': "P, S",
-                'MenuText': QT_TRANSLATE_NOOP("Placement", "Placement"),
-                'ToolTip': QT_TRANSLATE_NOOP("Placement", "Crear un campo fotovoltaico")}
+                'MenuText': QT_TRANSLATE_NOOP("Placement", "Adjust"),
+                'ToolTip': QT_TRANSLATE_NOOP("Placement", "Adjust object to terrain")}
 
     def Activated(self):
         sel = FreeCADGui.Selection.getSelection()

@@ -42,7 +42,7 @@ class PVPlantWorkbench (Workbench):
             PVPlantTreeGenerator, PVPlantTrench, PVPEarthWorks, \
             PVPlantStringBox, PVPlantCable, PVPlantStringing, \
             PVPlantPad, PVPlantRoad, PVPlantTerrain, PVPlantArea, \
-            exportDXF, exportPVSyst, PVPlantBOQMechanical, PVPlantBOQElectrical, PVPlantBOQCivil,\
+            exportPVSyst, PVPlantBOQMechanical, PVPlantBOQElectrical, PVPlantBOQCivil,\
             GraphProfile, \
             reload
 

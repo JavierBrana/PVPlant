@@ -1039,13 +1039,13 @@ class _Tracker(_Frame):
         return compound
 
     def execute(self, obj):
-        # obj.Shape = compound
-        # |- Modules and Beams = compound
+        # obj.Shape: compound
+        # |- Modules and Beams: compound
         # |-- Modules array: compound
         # |___ Modules: solid
-        # |-- Beams
+        # |-- Beams: compound
         # |--- MainBeam: solid
-        # |--- Secundary Beams: solid
+        # |--- Secundary Beams: solid (if exist)
         # |- Poles array: compound
         # |-- Poles: solid
         #
@@ -1065,8 +1065,6 @@ class _Tracker(_Frame):
             totalh = h * obj.ModuleRows + obj.ModuleRowGap.Value * (obj.ModuleRows - 1)
             totalw = w * obj.ModuleCols + obj.ModuleColGap.Value * (obj.ModuleCols - 1) + \
                      (obj.MotorGap.Value - obj.ModuleColGap.Value) if obj.MotorGap.Value > 0 else 0
-            obj.Width = totalw + obj.ModuleOffsetX.Value * 2
-            obj.Length = totalh
 
             modules = self.CalculateModuleArray(obj, totalh, totalw, h, w)
             beams = self.calculateBeams(obj, totalh, totalw, h, w)
@@ -1079,11 +1077,15 @@ class _Tracker(_Frame):
             obj.Shape = Part.makeCompound([compound, poles])
             obj.Placement = pl
 
+            obj.Width = obj.Shape.BoundBox.XLength
+            obj.Length = obj.Shape.BoundBox.YLength
+
             angle = obj.Placement.Rotation.toEuler()[1]
             if angle > obj.MaxLengthwiseTilt:
                 obj.ViewObject.ShapeColor = (1.0, 0.0, 0.0)
             else:
                 obj.ViewObject.ShapeColor = (1.0, 1.0, 1.0)
+
 
 
 class _ViewProviderTracker(ArchComponent.ViewProviderComponent):
