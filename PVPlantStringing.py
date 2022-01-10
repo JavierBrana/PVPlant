@@ -262,29 +262,83 @@ class _ViewProviderStringSetup:
         """
         return None
 
+class _SelObserver:
+    def __init__(self, form):
+        self.form = form
+
+    def addSelection(self, doc, obj, sub, pnt):
+        '''
+        if self.disableObserver:
+            return
+        FreeCAD.Console.PrintLog("FSO-AddSel:" + str(obj) + ":" + str(sub) + "\n")
+        # if len(sub) == 0 and obj == FSSelectionFilterGate.lastobj:
+        #  self.dialog.addSelection(FSSelectionFilterGate.lastedge)
+        if sub[0:4] == 'Edge':
+            self.dialog.addSelectionEdge(obj, sub)
+        elif sub[0:4] == 'Face':
+            self.dialog.addSelectionFace(obj, sub)
+        return True'''
+        print(doc, "\n", obj, "\n", sub, "\n", pnt)
+
+        rack = FreeCAD.ActiveDocument.getObjectsByLabel(obj)[0].Shape
+        modules = rack.SubShapes[0].SubShapes[0].SubShapes
+        if sub[0:4] == 'Face':
+            numFace = int(sub.replace('Face', '')) - 1
+            selface = rack.Faces[numFace]
+            for module in modules:
+                for num, face in enumerate(module.Faces):
+                    if selface.isSame(face):
+                        print("Encontrado: ", modules.index(module))
+
+        '''
+        if (info["State"] == "UP") and (info["Button"] == 'BUTTON1'):
+            sel = FreeCADGui.Selection.getSelectionEx()
+            if len(sel) > 0:
+                rack = FreeCAD.ActiveDocument.Tracker.Shape
+                modules = rack.SubShapes[0].SubShapes[0].SubShapes
+                obj = sel[0].SubObjects[0]
+                for module in modules:
+                    for face in module.Faces:
+                        if obj.isSame(face):
+                            print("Encontrado: ", modules.index(module))
+                            return'''
+
+
+
+    def removeSelection(self, doc, obj, sub):  # Delete the selected object
+        print("FSO-RemSel:" + str(obj) + ":" + str(sub) + "\n")
+
+    def setSelection(self, doc):  # Selection in ComboView
+        print("FSO-SetSel:" + "\n")
+
+    def clearSelection(self, doc):  # If click on the screen, clear the selection
+        print("FSO-ClrSel:" + "\n")
+
 class _StringSetupPanel:
     def __init__(self, obj=None):
-
         if obj is None:
             self.new = True
             self.obj = makeStringSetup()
         else:
             self.new = False
             self.obj = obj
-
         self.form = FreeCADGui.PySideUic.loadUi(__dir__ + "/PVPlantStringSetup.ui")
 
+        self.selobserver = _SelObserver(self)
+        FreeCADGui.Selection.addObserver(self.selobserver)
+
+
     def accept(self):
-        FreeCADGui.Control.closeDialog()
+        self.FormClosing()
         return True
 
     def reject(self):
-        FreeCAD.ActiveDocument.removeObject(self.obj.Name)
-        if self.new:
-            FreeCADGui.Control.closeDialog()
+        self.FormClosing()
         return True
 
-
+    def FormClosing(self):
+        FreeCADGui.Selection.removeObserver(self.selobserver)
+        FreeCADGui.Control.closeDialog()
 
 
 

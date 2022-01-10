@@ -402,6 +402,13 @@ class _Fence(ArchComponent.Component):
         postPlacements = []
         pathsegments = self.calculateSegments(obj, pathwire)
 
+        newversion = False
+        if newversion:
+            sections =  int(pathLength / sectionLength)
+            surplus = pathLength - (sections * sectionLength)
+
+
+
         count = 0
         drawFirstPost = True
         pathLength = 0
