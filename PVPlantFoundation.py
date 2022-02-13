@@ -38,20 +38,17 @@ else:
         return txt
     # \endcond
 
-## @package ArchFoundation
-#  \ingroup ARCH
-#  \brief The Foundation object and tools
-#
-#  This module provides tools to build Foundation and Foundation connector objects.
-#  Foundations are tubular objects extruded along a base line.
+import PVPlantResources
+from PVPlantResources import DirIcons as DirIcons
 
-__title__ = "Arch Foundation tools"
-__author__ = "Yorik van Havre"
-__url__ = "http://www.freecadweb.org"
+__title__="FreeCAD Fotovoltaic Power Plant Toolkit"
+__author__ = "Javier Braña"
+__url__ = "sn"
 
 
 def makeFoundation(baseobj=None, diameter=200, length=700, placement=None, name="Foundation"):
-    "makeFoundation([baseobj,diamerter,length,placement,name]): creates an Foundation object from the given base object"
+    "makeFoundation([baseobj,diamerter,length,placement,name]):"
+    "creates an Foundation object from the given base object"
 
     if not FreeCAD.ActiveDocument:
         FreeCAD.Console.PrintError("No active document. Aborting\n")
@@ -82,44 +79,13 @@ def makeFoundation(baseobj=None, diameter=200, length=700, placement=None, name=
     return obj
 
 
-class _CommandFoundation:
-    "the Arch Foundation command definition"
-
-    def GetResources(self):
-
-        return {'Pixmap': 'Foundation',
-                'MenuText': QT_TRANSLATE_NOOP("Foundation", "Foundation"),
-                'Accel': "P, I",
-                'ToolTip': QT_TRANSLATE_NOOP("Foundation",
-                                             "Creates a Foundation object from a given Wire or Line")}
-
-    def IsActive(self):
-
-        return not FreeCAD.ActiveDocument is None
-
-    def Activated(self):
-        '''
-        FreeCAD.ActiveDocument.openTransaction(translate("Arch", "Create Foundation"))
-        FreeCADGui.addModule("Arch")
-        FreeCADGui.doCommand("obj = Arch.makeFoundation()")
-        FreeCADGui.addModule("Draft")
-        FreeCADGui.doCommand("Draft.autogroup(obj)")
-        FreeCAD.ActiveDocument.commitTransaction()
-        '''
-        import Draft
-        obj = makeFoundation()
-        Draft.autogroup(obj)
-        FreeCAD.ActiveDocument.recompute()
-
-
 class _PVPlantFoundation(ArchComponent.Component):
     "the PVPlant Foundation object"
 
     def __init__(self, obj):
-
         ArchComponent.Component.__init__(self, obj)
+        self.Type = ""
         self.setProperties(obj)
-        obj.IfcType = "Element"
 
     def setProperties(self, obj):
 
@@ -135,9 +101,9 @@ class _PVPlantFoundation(ArchComponent.Component):
                             QT_TRANSLATE_NOOP("App::Property", "An optional closed profile to base this Foundation on"))
 
         self.Type = "Foundation"
+        obj.IfcType = "Element"
 
     def onDocumentRestored(self, obj):
-
         ArchComponent.Component.onDocumentRestored(self, obj)
         self.setProperties(obj)
 
@@ -229,6 +195,33 @@ class _ViewProviderFoundation(ArchComponent.ViewProviderComponent):
     def getIcon(self):
         import Arch_rc
         return ":/icons/Arch_Pipe_Tree.svg"
+
+
+def _FoundationTaskPanel():
+    ''''''
+
+    return True
+
+
+class _CommandFoundation:
+
+    def GetResources(self):
+        """Set icon, menu and tooltip."""
+        return {'Pixmap': str(os.path.join(DirIcons, "trench.svg")),
+                'MenuText': "Trench",
+                'Accel': "C, T",
+                'ToolTip': "Creates a Trench object from setup dialog."}
+
+    def IsActive(self):
+        if FreeCAD.ActiveDocument:
+            return True
+        else:
+            return False
+
+    def Activated(self):
+        """Execute when the command is called."""
+        task = _FoundationTaskPanel();
+        sel = FreeCADGui.Selection.getSelection()
 
 
 if FreeCAD.GuiUp:

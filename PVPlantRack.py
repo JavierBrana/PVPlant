@@ -155,7 +155,7 @@ class _Frame(ArchComponent.Component):
                             QT_TRANSLATE_NOOP("App::Property",
                                               "The facemaker type to use to build the profile of this object")
                             ).ModuleViews = True
-
+        '''
         if not "Modules" in pl:
             obj.addProperty("App::PropertyLinkSubListChild",
                             "Modules",
@@ -163,6 +163,7 @@ class _Frame(ArchComponent.Component):
                             QT_TRANSLATE_NOOP("App::Property",
                                               "The facemaker type to use to build the profile of this object")
                             ).ModuleViews = True
+        '''
 
         # Frame --------------------------------------------------------------------------------------------------------
         if not "Tilt" in pl:
@@ -205,87 +206,32 @@ class _Frame(ArchComponent.Component):
                                               "Total Area de los Paneles")
                             )
             obj.setEditorMode("TotalAreaShape", 1)
+
+        # Placement
+        if not "Route" in pl:
+            obj.addProperty("App::PropertyLink",
+                            "Route",
+                            "Placement",
+                            QT_TRANSLATE_NOOP("Part::PropertyPartShape",
+                                              "Total Area de los Paneles")
+                            )
+        obj.setEditorMode("Route", 1)
+
+        if not "RouteSection" in pl:
+            obj.addProperty("App::PropertyIntegerConstraint",
+                            "RouteSection",
+                            "Placement",
+                            QT_TRANSLATE_NOOP("Part::PropertyPartShape",
+                                              "Total Area de los Paneles")
+                            )
+        obj.setEditorMode("RouteSection", 1)
+
         self.Type = "Frame"
 
-        '''[
-                 'App::PropertyBool',
-                 'App::PropertyBoolList', 
-                 'App::PropertyFloat', 
-                 'App::PropertyFloatList', 
-                 'App::PropertyFloatConstraint', 
-                 'App::PropertyPrecision', 
-                 'App::PropertyQuantity', 
-                 'App::PropertyQuantityConstraint', 
-                 'App::PropertyAngle', 
-                 'App::PropertyDistance', 
-                 'App::PropertyLength', 
-                 'App::PropertyArea', 
-                 'App::PropertyVolume', 
-                 'App::PropertyFrequency', 
-                 'App::PropertySpeed', 
-                 'App::PropertyAcceleration', 
-                 'App::PropertyForce',
-                 'App::PropertyPressure',
-                 'App::PropertyVacuumPermittivity', 
-                 'App::PropertyInteger', 
-                 'App::PropertyIntegerConstraint', 
-                 'App::PropertyPercent', 
-                 'App::PropertyEnumeration', 
-                 'App::PropertyIntegerList', 
-                 'App::PropertyIntegerSet', 
-                 'App::PropertyMap', 
-                 'App::PropertyString', 
-                 'App::PropertyPersistentObject', 
-                 'App::PropertyUUID', 
-                 'App::PropertyFont', 
-                 'App::PropertyStringList', 
-                 'App::PropertyLink', 
-                 'App::PropertyLinkChild', 
-                 'App::PropertyLinkGlobal', 
-                 'App::PropertyLinkHidden', 
-                 'App::PropertyLinkSub', 
-                 'App::PropertyLinkSubChild', 
-                 'App::PropertyLinkSubGlobal', 
-                 'App::PropertyLinkSubHidden', 
-                 'App::PropertyLinkList', 
-                 'App::PropertyLinkListChild', 
-                 'App::PropertyLinkListGlobal', 
-                 'App::PropertyLinkListHidden', 
-                 'App::PropertyLinkSubList', 
-                 'App::PropertyLinkSubListChild', 
-                 'App::PropertyLinkSubListGlobal', 
-                 'App::PropertyLinkSubListHidden', 
-                 'App::PropertyXLink', 
-                 'App::PropertyXLinkSub', 
-                 'App::PropertyXLinkSubList', 
-                 'App::PropertyXLinkList', 
-                 'App::PropertyMatrix', 
-                 'App::PropertyVector', 
-                 'App::PropertyVectorDistance', 
-                 'App::PropertyPosition', 
-                 'App::PropertyDirection', 
-                 'App::PropertyVectorList', 
-                 'App::PropertyPlacement', 
-                 'App::PropertyPlacementList', 
-                 'App::PropertyPlacementLink', 
-                 'App::PropertyColor', 
-                 'App::PropertyColorList', 
-                 'App::PropertyMaterial', 
-                 'App::PropertyMaterialList', 
-                 'App::PropertyPath', 
-                 'App::PropertyFile', 
-                 'App::PropertyFileIncluded', 
-                 'App::PropertyPythonObject', 
-                 'App::PropertyExpressionEngine', 
-                 'Part::PropertyPartShape', 
-                 'Part::PropertyGeometryList', 
-                 'Part::PropertyShapeHistory', 
-                 'Part::PropertyFilletEdges', 
-                 'Mesh::PropertyNormalList', 
-                 'Mesh::PropertyCurvatureList', 
-                 'Mesh::PropertyMeshKernel', 
-                 'Sketcher::PropertyConstraintList']
-        '''
+    def onChanged(self, obj, prop):
+        if (prop == "Route"):
+            if obj.getPropertyByName(prop):
+                obj.RouteSection = (1, 1, len(obj.getPropertyByName("Route").Shape.Edges) + 1, 1)
 
     def getTotalAreaShape(self):
         return self.totalAreaShape
@@ -508,7 +454,7 @@ class _FixedRack(_Frame):
 
         for x in range(int(obj.NumberPostsX.Value)):
             xx = offsetX + (
-                        obj.NumberPostsX.Value + obj.DistancePostsX.Value) * x  # * math.cos(obj.Placement.Rotation.toEuler()[1])
+                    obj.NumberPostsX.Value + obj.DistancePostsX.Value) * x  # * math.cos(obj.Placement.Rotation.toEuler()[1])
             yy = offsetY
             zz = offsetZ  # * math.sin(obj.Placement.Rotation.toEuler()[1])
 
@@ -688,7 +634,6 @@ class _Tracker(_Frame):
         # Definición de Variables:
         _Frame.__init__(self, obj)
         self.setProperties(obj)
-        obj.Proxy = self
 
         obj.ModuleCols = 45
         obj.ModuleRows = 2
@@ -833,17 +778,16 @@ class _Tracker(_Frame):
                             ).MinPhi = -60
 
         self.Type = "1 Axis Tracker"
+        obj.Proxy = self
 
     def onDocumentRestored(self, obj):
-        """Method run when the document is restored.
-        Re-adds the Arch component, and Arch wall properties."""
-
         ArchComponent.Component.onDocumentRestored(self, obj)
         self.setProperties(obj)
-        obj.Proxy = self
 
     def onChanged(self, obj, prop):
         '''Do something when a property has changed'''
+
+        _Frame.onChanged(self, obj, prop)
 
         '''
         ['Additions', 'AerialPole', 'Axis', 'Base', 'BeamHeight', 'BeamOffset', 'BeamSpacing', 'BeamWidth', 'CloneOf', 
@@ -1038,23 +982,29 @@ class _Tracker(_Frame):
             compound.add(postCopy)
         return compound
 
+    def rotateModules(self, obj, compound):
+        ''''''
+
+    def rotatePosts(self, obj):
+        ''''''
+
     def execute(self, obj):
         # obj.Shape: compound
         # |- Modules and Beams: compound
         # |-- Modules array: compound
-        # |___ Modules: solid
+        # |--- Modules: solid
         # |-- Beams: compound
         # |--- MainBeam: solid
         # |--- Secundary Beams: solid (if exist)
         # |- Poles array: compound
         # |-- Poles: solid
         #
-        # once you have done this structure you don´t need recompute everything, only the part you need
+        # TODO: once you have done this structure you don´t need recompute everything,
+        #       only the part you need
 
         if self.changed:
             self.changed = False
             pl = obj.Placement
-
             if obj.ModuleOrientation == "Portrait":
                 w = obj.ModuleWidth.Value
                 h = obj.ModuleHeight.Value
@@ -1070,22 +1020,22 @@ class _Tracker(_Frame):
             beams = self.calculateBeams(obj, totalh, totalw, h, w)
             poles = self.CalculatePosts(obj, totalh, totalw)
             compound = Part.makeCompound([modules, beams])
-            compound.Placement.rotate(FreeCAD.Vector(0, 0, obj.MainBeamAxisPosition.Value),
+            # TODO: change this to a independent function:
+            compound.Placement.rotate(FreeCAD.Vector(0, 0, obj.BeamHeight.Value / 2),
                                       FreeCAD.Vector(1, 0, 0),
                                       obj.Tilt)
+
             compound.Placement.Base.z = obj.MainBeamAxisPosition.Value - (obj.MainBeamHeight.Value / 2)
             obj.Shape = Part.makeCompound([compound, poles])
             obj.Placement = pl
-
             obj.Width = obj.Shape.BoundBox.XLength
             obj.Length = obj.Shape.BoundBox.YLength
 
-            angle = obj.Placement.Rotation.toEuler()[1]
-            if angle > obj.MaxLengthwiseTilt:
-                obj.ViewObject.ShapeColor = (1.0, 0.0, 0.0)
-            else:
-                obj.ViewObject.ShapeColor = (1.0, 1.0, 1.0)
-
+        angle = obj.Placement.Rotation.toEuler()[1]
+        if angle > obj.MaxLengthwiseTilt:
+            obj.ViewObject.ShapeColor = (1.0, 0.0, 0.0)
+        else:
+            obj.ViewObject.ShapeColor = (1.0, 1.0, 1.0)
 
 
 class _ViewProviderTracker(ArchComponent.ViewProviderComponent):
@@ -1103,7 +1053,7 @@ class _ViewProviderTracker(ArchComponent.ViewProviderComponent):
         Edit mode is entered when a user double clicks on an object in the tree
         view, or when they use the menu option [Edit -> Toggle Edit Mode].
 
-        Just display the standard Arch component task panel.
+        Just display the standard FRAME SETUP task panel.
 
         Parameters
         ----------
@@ -1120,7 +1070,6 @@ class _ViewProviderTracker(ArchComponent.ViewProviderComponent):
         if (mode == 0) and hasattr(self, "Object"):
             taskd = _TrackerTaskPanel(self.Object)
             taskd.obj = self.Object
-            # taskd.update()
             FreeCADGui.Control.showDialog(taskd)
             return True
 

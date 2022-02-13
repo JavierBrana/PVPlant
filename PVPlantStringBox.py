@@ -180,7 +180,6 @@ class _StringBox(ArchComponent.Component):
                             "Connections",
                             QT_TRANSLATE_NOOP("App::Property", "InputCables"))
 
-
         # Outputs
         '''
         if not "Outputs" in pl:
@@ -280,7 +279,6 @@ class _StringBox(ArchComponent.Component):
                     cpd.add(cyl)
                 numInputs -= nperrow
             return points
-
 
         box = Part.makeBox(obj.Length.Value, obj.Width.Value, obj.Height.Value)
         box.Placement.Base.x -= obj.Length.Value / 2

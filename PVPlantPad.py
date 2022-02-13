@@ -423,7 +423,7 @@ class _ViewProviderPad(ArchComponent.ViewProviderComponent):
         ArchComponent.ViewProviderComponent.__init__(self, vobj)
 
     def getIcon(self):
-        return str(os.path.join(PVPlantResources.DirIcons, "slope.svg"))
+        return str(os.path.join(PVPlantResources.DirIcons, "pad.svg"))
 """
     def attach(self, vobj):
         '''
@@ -539,7 +539,7 @@ class _CommandPad(gui_base_original.Creator):
 
     def GetResources(self):
         """Set icon, menu and tooltip."""
-        return {'Pixmap': str(os.path.join(DirIcons, "slope.svg")),
+        return {'Pixmap': str(os.path.join(DirIcons, "pad.svg")),
                 'MenuText': QtCore.QT_TRANSLATE_NOOP("PVPlantPad", "Pad"),
                 'Accel': "C, P",
                 'ToolTip': QtCore.QT_TRANSLATE_NOOP("PVPlantPad",

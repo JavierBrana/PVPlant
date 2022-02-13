@@ -456,8 +456,7 @@ class Compass(object):
         darkGreyMaterial.diffuseColor.set1Value(0, 0.9, 0.9, 0.9)  # dark color
 
         lightGreyMaterial = coin.SoMaterial()
-        lightGreyMaterial.diffuseColor.set1Value(
-            0, 0.5, 0.5, 0.5)  # light color
+        lightGreyMaterial.diffuseColor.set1Value(0, 0.5, 0.5, 0.5)  # light color
 
         coords = self.buildCoordinates()
 
@@ -782,14 +781,14 @@ class _ViewProviderSite(ArchSite._ViewProviderSite):
     def __init__(self, vobj):
         ArchSite._ViewProviderSite.__init__(self, vobj)
         vobj.Proxy = self
-        vobj.addExtension("Gui::ViewProviderGroupExtensionPython", self)
-        self.setProperties(vobj)
+        #vobj.addExtension("Gui::ViewProviderGroupExtensionPython", self)
+        #self.setProperties(vobj)
 
     def getIcon(self):
         """
         Return the path to the appropriate icon.
         """
-        return str(os.path.join(DirIcons, "solar-panel.svg"))
+        return str(os.path.join(DirIcons, "icon.svg"))
 
     def claimChildren(self):
         """Define which objects will appear as children in the tree view.

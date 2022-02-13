@@ -48,9 +48,12 @@ except AttributeError:
     def _fromUtf8(s):
         return s
 
-import threading
 import PVPlantResources
+import Utils.PVPlantTrace as PVPlantTrace
+from PVPlantResources import DirIcons as DirIcons
 import PVPlantSite
+
+
 
 
 def makePlacement():
@@ -77,6 +80,7 @@ class _Placement:
             obj.setEditorMode("NumberOfStrings", 1)
 
         self.Type = "StringSetup"
+        obj.Proxy = self
 
         '''
         ['App::PropertyBool', 
@@ -173,6 +177,7 @@ class _Placement:
         self.obj.NumberOfStrings = self.StringCount
         self.StringCount += 1
 
+
 class _ViewProviderPlacement:
     def __init__(self, vobj):
         '''
@@ -207,6 +212,7 @@ class _ViewProviderPlacement:
         """
         Enable edit
         """
+
         return True
 
     def unsetEdit(self, vobj, mode=0):
@@ -245,221 +251,6 @@ class _ViewProviderPlacement:
         """
         return None
 
-def calculatePlacement(globalRotation, edge, offset, RefPt, xlate,
-                       normal=None, Orientation=0):
-    """Orient shape to tangent at parm offset along edge."""
-    import functools
-    import DraftVecUtils
-    import math
-
-    placement = FreeCAD.Placement()
-    placement.Rotation = globalRotation
-    placement.move(RefPt + xlate)
-
-    # unit +Z  Probably defined elsewhere?
-    z = FreeCAD.Vector(0, 0, 1)
-    # y = FreeCAD.Vector(0, 1, 0)               # unit +Y
-    x = FreeCAD.Vector(1, 0, 0)  # unit +X
-    nullv = FreeCAD.Vector(0, 0, 0)
-
-    # get local coord system - tangent, normal, binormal, if possible
-    t = edge.tangentAt(get_parameter_from_v0(edge, offset))
-    t.normalize()
-
-    try:
-        if normal:
-            n = normal
-        else:
-            n = edge.normalAt(get_parameter_from_v0(edge, offset))
-            n.normalize()
-        b = (t.cross(n))
-        b.normalize()
-    # no normal defined here
-    except FreeCAD.Base.FreeCADError:
-        n = nullv
-        b = nullv
-        FreeCAD.Console.PrintLog("Draft PathArray.orientShape - Cannot calculate Path normal.\n")
-
-    lnodes = z.cross(b)
-
-    try:
-        # Can't normalize null vector.
-        lnodes.normalize()
-    except:
-        # pathological cases:
-        pass
-
-    if n == nullv:  # 1) can't determine normal, don't align.
-        print(" 1) can't determine normal, don't align.")
-        psi = 0.0
-        theta = 0.0
-        phi = 0.0
-        FreeCAD.Console.PrintWarning("Draft PathArray.orientShape - Path normal is Null. Cannot align.\n")
-    elif abs(b.dot(z)) == 1.0:  # 2) binormal is || z
-        # align shape to tangent only
-        print(" # 2) binormal is || z")
-        psi = math.degrees(DraftVecUtils.angle(x, t, z))
-        theta = 0.0
-        phi = 0.0
-        FreeCAD.Console.PrintWarning(
-            "Draft PathArray.orientShape - Gimbal lock. Infinite lnodes. Change Path or Base.\n")
-    else:  # 3) regular case
-        psi = 0  # math.degrees(DraftVecUtils.angle(x, lnodes, z))
-        theta = 0  # math.degrees(DraftVecUtils.angle(z, b, lnodes))
-        phi = math.degrees(DraftVecUtils.angle(lnodes, t, b))  # * Orientation  ??
-
-    rotations = [placement.Rotation]
-
-    if psi != 0.0:
-        rotations.insert(0, FreeCAD.Rotation(z, psi))
-    if theta != 0.0:
-        rotations.insert(0, FreeCAD.Rotation(lnodes, theta))
-    if phi != 0.0:
-        rotations.insert(0, FreeCAD.Rotation(b, phi))
-
-    if len(rotations) == 1:
-        finalRotation = rotations[0]
-    else:
-        finalRotation = functools.reduce(lambda rot1, rot2: rot1.multiply(rot2), rotations)
-
-    placement.Rotation = finalRotation
-
-    return placement
-
-def calculatePlacementsOnPath(shapeRotation, pathwire, xlate, rackLength=0, Spacing=0, Orientation=0,
-                              _offset_=0):
-    """Calculates the placements of a shape along a given path so that each copy will be distributed evenly"""
-    import Part
-    import DraftGeomUtils
-
-    def getInd(ends, comp):
-        for i in range(0, len(ends)):
-            if comp <= ends[i]:
-                return i
-        return len(ends) - 1
-
-    '''
-    normal = DraftGeomUtils.getNormal(pathwire.Shape)
-    if normal.z < 0:    # asegurarse de que siempre se dibuje por encima del suelo
-        normal.z *= -1
-        
-    '''
-    normal = FreeCAD.Vector(0, 0, 1)
-
-    path = Part.__sortEdges__(pathwire.Shape.Edges)
-    ends = []
-    cdist = 0
-
-    for e in path:  # find cumulative edge end distance
-        cdist += e.Length
-        ends.append(cdist)
-
-    placements = []
-
-    # TODO: Resisar que la estructura esté dentro del area del terreno
-    newver = 2
-
-    if newver == 0:
-        step = rackLength + Spacing
-        travel = rackLength / 2
-
-        while ((travel + rackLength / 2) <= cdist):  # Cambiar esto
-            # which edge in path should contain this shape?
-            # avoids problems with float math travel > ends[-1]
-            iend = getInd(ends, travel)
-
-            # place shape at proper spot on proper edge
-            remains = ends[iend] - travel
-            offset = path[iend].Length - remains
-            pt = path[iend].valueAt(get_parameter_from_v0(path[iend], offset))
-
-            placements.append(calculatePlacement(shapeRotation,
-                                                 path[iend],
-                                                 offset,
-                                                 pt, xlate, normal,
-                                                 Orientation))
-            travel += step
-
-    elif newver == 1:
-        travel = _offset_
-        pro = False
-        pts = []
-
-        while ((travel + rackLength / 2) <= cdist):  # Cambiar esto
-            iend = getInd(ends, travel)
-            remains = ends[iend] - travel
-            offset = path[iend].Length - remains
-            pt = path[iend].valueAt(get_parameter_from_v0(path[iend], offset))
-            pts.append(pt)
-
-            if pro:
-                travel += Spacing
-
-                l = Part.LineSegment()
-                l.StartPoint = pts[len(pts) - 2]
-                l.EndPoint = pts[len(pts) - 1]
-                edge = l.toShape()
-                print(edge.Length, " vs ", rackLength)
-                placements.append(calculatePlacement(shapeRotation, edge, edge.Length / 2,
-                                                     edge.CenterOfMass, xlate, normal,
-                                                     Orientation))
-                del l
-                del edge
-            else:
-                travel += rackLength
-
-            pro = not pro
-
-        Draft.makeWire(pts, closed=False, face=None, support=None)
-        del pts[:]
-
-    elif newver == 2:
-
-        pts = pathwire.Shape.discretize(Distance=Spacing + rackLength, First=_offset_)
-        if len(pts) > 1:
-            for i in range(0, len(pts) - 2):
-                l = Part.LineSegment()
-                l.StartPoint = pts[i]
-                l.EndPoint = pts[i + 1]
-                edge = l.toShape()
-                print(edge.Length, " vs ", rackLength)
-                placements.append(calculatePlacement(shapeRotation, edge, edge.Length / 2,
-                                                     edge.CenterOfMass, xlate, normal,
-                                                     Orientation))
-
-                del l
-                del edge
-
-        path = Draft.makeWire(pts, closed=False, face=None, support=None)
-        path.Label = "Wire_cut"
-
-        # del pts[:]
-    return placements, pts
-
-def get_parameter_from_v0(edge, offset):
-    """Return parameter at distance offset from edge.Vertexes[0].
-    sb method in Part.TopoShapeEdge???
-    """
-    import DraftVecUtils
-
-    lpt = edge.valueAt(edge.getParameterByLength(0))
-    vpt = edge.Vertexes[0].Point
-
-    if not DraftVecUtils.equals(vpt, lpt):
-        # this edge is flipped
-        length = edge.Length - offset
-    else:
-        # this edge is right way around
-        length = offset
-    return edge.getParameterByLength(length)
-
-def calculateSections(frame, Placements):
-    for placement in Placements:
-        cp = FreeCAD.ActiveDocument.copyObject(frame, False)
-        # FreeCADGuiGui.runCommand('Std_DuplicateSelection', 0)
-        cp.Placement = placement
-        cp.CloneOf = frame
-        del cp
 
 class _PVPlantPlacementTaskPanel:
     '''The editmode TaskPanel for Schedules'''
@@ -468,6 +259,12 @@ class _PVPlantPlacementTaskPanel:
         self.Terrain = None
         self.Rack = None
         self.PVArea = None
+        self.Area = None
+        self.gap_col = .0
+        self.gap_row = .0
+        self.offsetX = .0
+        self.offsetY = .0
+        self.Dir = FreeCAD.Vector(0, -1, 0)  # Norte a sur
 
         # self.form:
         self.form = FreeCADGui.PySideUic.loadUi(os.path.join(PVPlantResources.__dir__, "PVPlantPlacement.ui"))
@@ -507,47 +304,45 @@ class _PVPlantPlacementTaskPanel:
             self.Rack = selection[0]
             self.form.editFrame.setText(self.Rack.Label)
 
-    def createFrameFromPoints(self, pl):
+    def addDirection(self):
+        ''' '''
+
+    def createFrameFromPoints(self, placements):
+        def createFrame(pl):
+            newrack = FreeCAD.ActiveDocument.copyObject(self.Rack)
+            newrack.Label = "Tracker"
+            newrack.Placement = pl
+            newrack.Visibility = True
+            MechanicalGroup.addObject(newrack)
+
         try:
             MechanicalGroup = FreeCAD.ActiveDocument.Frames
         except:
             MechanicalGroup = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup", 'Frames')
             MechanicalGroup.Label = "Frames"
 
-        for point in pl:
-            newrack = FreeCAD.ActiveDocument.copyObject(self.Rack)
-            newrack.Label = "Tracker"
-            newrack.Placement.rotate(newrack.Shape.BoundBox.Center, FreeCAD.Vector(0, 0, 1), -90)
-            newrack.Placement.Base = point
-            newrack.Visibility = True
-            MechanicalGroup.addObject(newrack)
+        if isinstance(placements, list):
+            for place in placements:
+                createFrame(place)
+        else:
+            createFrame(placements)
 
         FreeCAD.ActiveDocument.Site.addObject(MechanicalGroup)
-        # TODO: ajustar los tracker al terreno
 
     def calculateWorkingArea(self):
-        Area = self.PVArea.Shape
+        self.Area = self.PVArea.Shape
         ProhibitedAreas = []
 
         if len(ProhibitedAreas) > 0:
-            return Area.cut(ProhibitedAreas)
-        else:
-            return Area
+            self.Area.cut(ProhibitedAreas)
 
-    def calculateAlignedArray(self):
-        from datetime import datetime
-        starttime = datetime.now()
+    def getAligments(self):
+        self.gap_col = FreeCAD.Units.Quantity(self.form.editGapCols.text()).Value
+        self.gap_row = FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value + \
+                       max(self.Rack.Shape.BoundBox.XLength, self.Rack.Shape.BoundBox.YLength)
+        self.offsetX = FreeCAD.Units.Quantity(self.form.editOffsetHorizontal.text()).Value
+        self.offsetY = FreeCAD.Units.Quantity(self.form.editOffsetVertical.text()).Value
 
-        gap_col = FreeCAD.Units.Quantity(self.form.editGapCols.text()).Value
-        gap_row = FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value + \
-                  max(self.Rack.Shape.BoundBox.XLength, self.Rack.Shape.BoundBox.YLength)
-        offset_x = FreeCAD.Units.Quantity(self.form.editOffsetHorizontal.text()).Value
-        offset_y = FreeCAD.Units.Quantity(self.form.editOffsetVertical.text()).Value
-
-        # TODO: Chequear la forma: Ver que esté cerrada y transformarla en cara.
-        Area = self.calculateWorkingArea()
-
-        rec = Part.makePlane(self.Rack.Shape.BoundBox.YLength, self.Rack.Shape.BoundBox.XLength)
         # TODO: revisar todo esto: -----------------------------------------------------------------
         sel = FreeCADGui.Selection.getSelectionEx()[0]
         refh = None
@@ -572,77 +367,163 @@ class _PVPlantPlacementTaskPanel:
             else:
                 refv = sel.SubObjects[1]
 
-        steps = int((refv.BoundBox.XMax - Area.BoundBox.XMin + offset_x) / gap_col)
-        startx = refv.BoundBox.XMax + offset_x - gap_col * steps
-        steps = int((refh.BoundBox.YMin - Area.BoundBox.YMax + offset_y) / gap_row)
-        starty = refh.BoundBox.YMin + offset_y + gap_row * steps
+        steps = int((refv.BoundBox.XMax - self.Area.BoundBox.XMin + self.offsetX) / self.gap_col)
+        startx = refv.BoundBox.XMax + self.offsetX - self.gap_col * steps
+        steps = int((refh.BoundBox.YMin - self.Area.BoundBox.YMax + self.offsetY) / self.gap_row)
+        starty = refh.BoundBox.YMin + self.offsetY + self.gap_row * steps
         # todo end ----------------------------------------------------------------------------------
 
-        pointsx = np.arange(startx, Area.BoundBox.XMax, gap_col)
-        pointsy = np.arange(starty, Area.BoundBox.YMin, -gap_row)
+        return np.arange(startx, self.Area.BoundBox.XMax, self.gap_col), \
+               np.arange(starty, self.Area.BoundBox.YMin, -self.gap_row)
 
-        ''' # Corridors:
-        if self.form.groupCorridor.isChecked():
-            if (self.form.editColCount.value() > 0):
-                xlen = len(pointsx)
-                count = self.form.editColCount.value()
-                val = FreeCAD.Units.Quantity(self.form.editColGap.text()).Value - (
-                            gap_col - min(self.Rack.Shape.BoundBox.XLength, self.Rack.Shape.BoundBox.YLength))
-                while count <= xlen:
-                    for i, point in enumerate(pointsx):
-                        if i >= count:
-                            pointsx[i] += val
-                    count += self.form.editColCount.value()
+    def adjustToTerrain(self, cols, width):
+        placements = list()
+        dist = FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value * 1.50
+        terrain = PVPlantSite.get().Terrain.Shape
+        vec1 = FreeCAD.Vector(self.Dir)
+        vec1.Length = (width / 2)
 
-            if (self.form.editRowCount.value() > 0):
-                ylen = len(pointsy)
-                count = self.form.editRowCount.value()
-                val = FreeCAD.Units.Quantity(self.form.editRowGap.text()).Value + gap_col - FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value
-                while count <= ylen:
-                    for i, point in enumerate(pointsy):
-                        if i >= count:
-                            pointsy[i] -= val
-                    count += self.form.editRowCount.value()
-        '''
+        for colnum, col in enumerate(cols):
+            groups = list()
+            groups.append([col[0]])
+            for i in range(1, len(col)):
+                group = groups[-1]
+                long = (col[i].sub(group[-1])).Length
+                long -= width
+                if long <= dist:
+                    group.append(col[i])
+                else:
+                    groups.append([col[i]])
+            for group in groups:
+                points = list()
+                points.append(group[0].sub(vec1))
+                for ind in range(0, len(group) - 1):
+                    points.append((group[ind].sub(vec1) + group[ind + 1].add(vec1)) / 2)
+                points.append(group[-1].add(vec1))
+
+                points3D = list()
+                if False:  # v0
+                    for ind in range(len(points) - 1):
+                        line = Part.LineSegment(points[ind], points[ind + 1])
+                        tmp = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
+                        if len(tmp.Vertexes) > 0:
+                            if ind == 0:
+                                points3D.append(tmp.Vertexes[0].Point)
+                            points3D.append(tmp.Vertexes[-1].Point)
+                else:  # V1
+                    line = Part.LineSegment(points[0], points[-1])
+                    tmp = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
+                    if len(tmp.Vertexes) > 0:
+                        tmppoints = [ver.Point for ver in tmp.Vertexes]
+                        for point in points:
+                            '''# OPTION 1:
+                            line = Part.Line(point, point + FreeCAD.Vector(0, 0, 10))
+                            for i in range(len(tmppoints) - 1):
+                                seg = Part.LineSegment(tmppoints[i], tmppoints[i + 1])
+                                inter = line.intersect(seg)
+                                print(inter)
+                                if len(inter) > 0:
+                                    points3D.append(FreeCAD.Vector(inter[0].X, inter[0].Y, inter[0].Z))
+                            '''
+                            # OPTION 2:
+                            plane = Part.Plane(point, self.Dir)
+                            for i in range(len(tmppoints) - 1):
+                                seg = Part.LineSegment(tmppoints[i], tmppoints[i + 1])
+                                inter = plane.intersect(seg)
+                                if len(inter) > 0:
+                                    if len(inter[0]):
+                                        inter = inter[0]
+                                        points3D.append(FreeCAD.Vector(inter[0].X, inter[0].Y, inter[0].Z))
+
+                if len(points) != len(points3D):
+                    i = 0
+                    while i < len(points3D) - 1:
+                        vec = points3D[i + 1].sub(points3D[i])
+                        if (vec.x == 0) and (vec.y == 0):
+                            if vec.z >= 0:
+                                points3D.pop(i)
+                            else:
+                                points3D.pop(i + 1)
+                            continue
+                        i += 1
+
+                if len(points3D) > 0:
+                    #Draft.makeWire(points3D)
+                    line = PVPlantTrace.Trace(points3D, "LineCol" + str(colnum))
+                else:
+                    print(" Error: No 3d points: \n", points)
+
+                for ind in range(0, len(points3D) - 1):
+                    pl = FreeCAD.Placement()
+                    vec = points3D[ind] - points3D[ind + 1]
+                    pl.Base = FreeCAD.Vector(group[ind])
+                    p = (points3D[ind] + points3D[ind + 1]) / 2
+                    pl.Base.z = p.z
+                    rot = FreeCAD.Rotation(FreeCAD.Vector(-1, 0, 0), vec)
+                    pl.Rotation = FreeCAD.Rotation(rot.toEuler()[0], rot.toEuler()[1], 0)
+                    placements.append(pl)
+
+        return placements
+
+    def calculateAlignedArray(self):
+        pointsx, pointsy = self.getAligments()
+        xx = self.Rack.Shape.BoundBox.XLength
+        yy = self.Rack.Shape.BoundBox.YLength
+        xx_med = xx / 2
+        yy_med = yy / 2
+        rec = Part.makePolygon([FreeCAD.Vector(-xx_med, -yy_med, 0),
+                                FreeCAD.Vector(xx_med, -yy_med, 0),
+                                FreeCAD.Vector(xx_med, yy_med, 0),
+                                FreeCAD.Vector(-xx_med, yy_med, 0),
+                                FreeCAD.Vector(-xx_med, -yy_med, 0)])
+        rec.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), FreeCAD.Vector(0, 1, 0))
+
+        # variables for corridors:
+        countcols = 0
+        countrows = 0
+        offsetcols = 0
+        offsetrows = 0
+        valcols = FreeCAD.Units.Quantity(self.form.editColGap.text()).Value - (self.gap_col - yy)
 
         pl = []
-        rows = []
+        cols = []
         for x in pointsx:
             col = []
             for y in pointsy:
-                point = FreeCAD.Vector(x, y - rec.BoundBox.YLength, 0.0)
-                if Area.isInside(point, 0.1, True):
+                point = FreeCAD.Vector(x + yy_med + offsetcols, y - xx_med + offsetrows, 0.0)
+                # first filter
+                if self.Area.isInside(point, 0.1, True):
                     cp = rec.copy()
                     cp.Placement.Base = point
-                    cut = cp.cut([Area])
+                    cut = cp.cut([self.Area])
+                    # second filter
                     if len(cut.Vertexes) == 0:
-                        pl.append(cp.BoundBox.Center)
-                        Part.show(cp)
-                        col.append(cp)
-                    else:
-                        col.append(cp)
-            if len(col)>0:
-                rows.append(col)
+                        pl.append(point)
+                        col.append(point)
 
-        #adjustToTerrainFromMatrix(rows)
+            if len(col) > 0:
+                cols.append(col)
+                # code for vertical corridors:
+                if self.form.groupCorridor.isChecked():
+                    if self.form.editColCount.value() > 0:
+                        countcols += 1
+                        if countcols == self.form.editColCount.value():
+                            offsetcols += valcols
+                            countcols = 0
 
-        total_time = datetime.now() - starttime
-        print(" -- Tiempo tardado:", total_time)
-        print("    --  Trackers creados: ", len(pl), ", tiempo por tracker: ", total_time / len(pl))
+        placements = self.adjustToTerrain(cols, xx)
+        return placements
 
-        return pl
 
+    #TODO: cambiar esto código para adaptarlo al "calculateAlignedArray":
     def calculateNonAlignedArray(self):
-        from datetime import datetime
-        starttime = datetime.now()
-
         gap_col = FreeCAD.Units.Quantity(self.form.editGapCols.text()).Value
         gap_row = FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value + max(self.Rack.Shape.BoundBox.XLength,
                                                                                    self.Rack.Shape.BoundBox.YLength)
         offset_x = FreeCAD.Units.Quantity(self.form.editOffsetHorizontal.text()).Value
         offset_y = FreeCAD.Units.Quantity(self.form.editOffsetVertical.text()).Value
 
-        Area = calculateWorkingArea
+        Area = self.calculateWorkingArea()
 
         rec = Part.makePlane(self.Rack.Shape.BoundBox.YLength, self.Rack.Shape.BoundBox.XLength)
 
@@ -680,7 +561,7 @@ class _PVPlantPlacementTaskPanel:
                 xlen = len(pointsx)
                 count = self.form.editColCount.value()
                 val = FreeCAD.Units.Quantity(self.form.editColGap.text()).Value - (
-                            gap_col - min(self.Rack.Shape.BoundBox.XLength, self.Rack.Shape.BoundBox.YLength))
+                        gap_col - min(self.Rack.Shape.BoundBox.XLength, self.Rack.Shape.BoundBox.YLength))
                 while count <= xlen:
                     for i, point in enumerate(pointsx):
                         if i >= count:
@@ -711,28 +592,31 @@ class _PVPlantPlacementTaskPanel:
                         if len(cut.Vertexes) == 0:
                             Part.show(cp)
                             pl.append(point)
-
-        total_time = datetime.now() - starttime
-        print(" -- Tiempo tardado:", total_time)
-        # print("    --  Trackers creados: ", len(pl), ", tiempo por tracker: ", total_time / len(pl))
-
         return pl
 
     def accept(self):
+        from datetime import datetime
+        starttime = datetime.now()
+
         if self.Terrain is None:
             self.Terrain = PVPlantSite.get().Terrain.Shape
 
         FreeCAD.ActiveDocument.openTransaction("Create Placement")
+        self.calculateWorkingArea()
+        placements = None
         if self.form.cbAlignFrames.isChecked():
             placements = self.calculateAlignedArray()
         else:
             placements = self.calculateNonAlignedArray()
 
         # last step: ------------------------------
-        # self.createFrameFromPoints(placements)
+        self.createFrameFromPoints(placements)
 
+        total_time = datetime.now() - starttime
+        print(" -- Tiempo tardado:", total_time)
         FreeCADGui.Control.closeDialog()
         return True
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # function AdjustToTerrain
@@ -750,9 +634,12 @@ def adjustToTerrain(frames):
     for col in cols:
         for group in col:
             frame1 = group[0]  # Norte / Oeste
-            frame_1 = group[-1]  # Sur / Este
+            frame2 = group[-1]  # Sur / Este
+
+            # TODO: revisar esta parte:
             p0 = FreeCAD.Vector(frame1.Shape.BoundBox.Center.x, frame1.Shape.BoundBox.YMax, 0)
-            pf = FreeCAD.Vector(frame_1.Shape.BoundBox.Center.x, frame_1.Shape.BoundBox.YMin, 0)
+            pf = FreeCAD.Vector(frame2.Shape.BoundBox.Center.x, frame2.Shape.BoundBox.YMin, 0)
+
             points = []
             vec = (pf - p0).normalize()
             points.append(p0)
@@ -768,7 +655,7 @@ def adjustToTerrain(frames):
 
             points3D = []
 
-            if False: # V2 en desarrollo
+            if False:  # V2 en desarrollo
                 line = Part.LineSegment(p0, pf)
                 pjt = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
                 for point in points:
@@ -781,7 +668,7 @@ def adjustToTerrain(frames):
                     print(tmp)
 
             else:
-                if False: # V0
+                if False:  # V0
                     # lot of slow
                     for point in points:
                         p1 = copy.deepcopy(point)
@@ -794,7 +681,7 @@ def adjustToTerrain(frames):
                             points3D.append(section.Vertexes[0].Point)
                         else:
                             print("No common")
-                else: # v1
+                else:  # v1
                     for ind in range(len(points) - 1):
                         line = Part.LineSegment(points[ind], points[ind + 1])
                         tmp = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
@@ -807,7 +694,7 @@ def adjustToTerrain(frames):
 
             for ind in range(0, len(points3D) - 1):
                 vec = points3D[ind] - points3D[ind + 1]
-                if False: # V0
+                if False:  # V0
                     angle = math.degrees(vec.getAngle(FreeCAD.Vector(0, 1, 0)))
                     angle1 = math.degrees(vec.getAngle(FreeCAD.Vector(0, 0, 1)))
                     # print(angle, " - ", angle1)
@@ -818,14 +705,13 @@ def adjustToTerrain(frames):
                     frame = group[ind]
                     p = (points3D[ind] + points3D[ind + 1]) / 2
                     frame.Placement.Base.z = p.z
-                    #Todo: probar con frame.Placement.rotate()
+                    # Todo: probar con frame.Placement.rotate()
                     frame.Placement.Rotation = FreeCAD.Rotation(0, 0, angle)
-                else: # v1
+                else:  # v1
                     frame = group[ind]
                     p = (points3D[ind] + points3D[ind + 1]) / 2
                     frame.Placement.Base.z = p.z
                     frame.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(-1, 0, 0), vec)
-
 
     total_time = datetime.now() - starttime
     print(" -- Tiempo tardado en ajustar al terreno:", total_time)
@@ -952,12 +838,31 @@ def AdjustToTerrain_V1(frames):
     FreeCAD.activeDocument().recompute()
 
 
-def getCols(sel, tolerance = 2000):
+def getCols(sel, tolerance=2000):
+    #TODO: get only frames from de selection
+
+
+    '''
+    for col in cols:
+        groups = list()
+        groups.append([col[0]])
+        for i in range(1, len(col)):
+            group = groups[-1]
+            long = (col[i].sub(group[-1])).Length
+            long -= width
+            if long <= dist:
+                group.append(col[i])
+            else:
+                groups.append([col[i]])
+    '''
+
     cols = []
     while len(sel) > 0:
         obj = sel[0]
         p = obj.Shape.BoundBox.Center
-        n = FreeCAD.Vector(1, 0, 0)  # TODO: detectar cual es el lado más pq1
+        vec = obj.Shape.SubShapes[1].SubShapes[1].BoundBox.Center - \
+              obj.Shape.SubShapes[1].SubShapes[0].BoundBox.Center
+        n = FreeCAD.Vector(vec.y, -vec.x, 0)
 
         # 1. Detectar los objetos que están en una misma columna
         col = []
@@ -974,16 +879,20 @@ def getCols(sel, tolerance = 2000):
         group = []
         newcol = []
         if len(col) > 1:
-            if False: # V1:
-                distances = []
+            if True:  # V1:
                 for ind in range(0, len(col) - 1):
                     vec1 = FreeCAD.Vector(col[ind + 1].Placement.Base)
                     vec1.z = 0
                     vec2 = FreeCAD.Vector(col[ind].Placement.Base)
                     vec2.z = 0
-                    distances.append((vec1 - vec2).Length)
-            else: # v0
-                distmin = tolerance
+                    distance = (vec1 - vec2).Length - (frame1.Width / 2 + frame2.Width / 2)
+                    if distance <= tolerance:
+                        group.append(col[ind + 1])
+                    else:
+                        newcol.append(group.copy())
+                        group.clear()
+                        group.append(col[ind + 1])
+            else:  # v0
                 group.append(col[0])
                 for ind in range(0, len(col) - 1):
                     print(ind, " of ", len(col))
@@ -992,7 +901,7 @@ def getCols(sel, tolerance = 2000):
                     len3 = (ed1.valueAt(ed1.FirstParameter + 0.5 * (ed1.LastParameter - ed1.FirstParameter)) -
                             ed2.valueAt(ed2.FirstParameter + 0.5 * (ed2.LastParameter - ed2.FirstParameter))).Length
 
-                    if len3 <= distmin:
+                    if len3 <= tolerance:
                         group.append(col[ind + 1])
                     else:
                         newcol.append(group.copy())
@@ -1003,7 +912,7 @@ def getCols(sel, tolerance = 2000):
 
         newcol.append(group)
         cols.append(newcol)
-    cols = sorted(cols, key=lambda k: k[0][0].Placement.Base.x, reverse = False)
+    cols = sorted(cols, key=lambda k: k[0][0].Placement.Base.x, reverse=False)
     return cols
 
 
@@ -1020,7 +929,7 @@ class _PVPlantConvertTaskPanel:
 
         # self.form:
         self.form = FreeCADGui.PySideUic.loadUi(os.path.join(PVPlantResources.__dir__, "PVPlantPlacementConvert.ui"))
-        self.form.setWindowIcon(QtGui.QIcon(os.path.join(PVPlantResources.DirIcons, "convert.svg")))
+        self.form.setWindowIcon(QtGui.QIcon(os.path.join(PVPlantResources.DirIcons, "Trace.svg")))
 
         self.form.buttonTo.clicked.connect(self.addTo)
 

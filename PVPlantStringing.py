@@ -24,6 +24,7 @@ import FreeCAD
 import ArchComponent
 import Part
 import math
+import PVPlantRack
 
 if FreeCAD.GuiUp:
     import FreeCADGui
@@ -67,12 +68,6 @@ class _StringSetup:
         self.obj = obj
         self.StringCount = 1
 
-        # test:
-        self.addString([27, 25, 23, 21, 19, 17, 15, 13, 11, 9, 7, 5, 3, 1,
-                        0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26])
-        self.addString([29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55,
-                        54, 52, 50, 48, 46, 44, 42, 30, 38, 36, 34, 32, 30, 28])
-
     def setCommonProperties(self, obj):
         pl = obj.PropertiesList
 
@@ -85,97 +80,17 @@ class _StringSetup:
             obj.setEditorMode("NumberOfStrings", 1)
 
         self.Type = "StringSetup"
+        obj.Proxy = self
 
-        '''
-        ['App::PropertyBool', 
-         'App::PropertyBoolList', 
-         'App::PropertyFloat', 
-         'App::PropertyFloatList',
-         'App::PropertyFloatConstraint', 
-         'App::PropertyPrecision', 
-         'App::PropertyQuantity',
-         'App::PropertyQuantityConstraint', 
-         'App::PropertyAngle', 
-         'App::PropertyDistance', 
-         'App::PropertyLength',
-         'App::PropertyArea', 
-         'App::PropertyVolume', 
-         'App::PropertyFrequency', 
-         'App::PropertySpeed',
-         'App::PropertyAcceleration', 
-         'App::PropertyForce', 
-         'App::PropertyPressure', 
-         'App::PropertyVacuumPermittivity',
-         'App::PropertyInteger', 
-         'App::PropertyIntegerConstraint', 
-         'App::PropertyPercent', 
-         'App::PropertyEnumeration',
-         'App::PropertyIntegerList', 
-         'App::PropertyIntegerSet', 
-         'App::PropertyMap', 
-         'App::PropertyString',
-         'App::PropertyPersistentObject', 
-         'App::PropertyUUID', 
-         'App::PropertyFont', 
-         'App::PropertyStringList',
-         'App::PropertyLink', 
-         'App::PropertyLinkChild', 
-         'App::PropertyLinkGlobal', 
-         'App::PropertyLinkHidden',
-         'App::PropertyLinkSub', 
-         'App::PropertyLinkSubChild',
-         'App::PropertyLinkSubGlobal',
-         'App::PropertyLinkSubHidden', 
-         'App::PropertyLinkList', 
-         'App::PropertyLinkListChild',
-         'App::PropertyLinkListGlobal', 
-         'App::PropertyLinkListHidden', 
-         'App::PropertyLinkSubList',
-         'App::PropertyLinkSubListChild', 
-         'App::PropertyLinkSubListGlobal', 
-         'App::PropertyLinkSubListHidden',
-         'App::PropertyXLink', 
-         'App::PropertyXLinkSub', 
-         'App::PropertyXLinkSubList', 
-         'App::PropertyXLinkList',
-         'App::PropertyMatrix', 
-         'App::PropertyVector', 
-         'App::PropertyVectorDistance', 
-         'App::PropertyPosition',
-         'App::PropertyDirection', 
-         'App::PropertyVectorList', 
-         'App::PropertyPlacement', 
-         'App::PropertyPlacementList',
-         'App::PropertyPlacementLink', 
-         'App::PropertyColor', 
-         'App::PropertyColorList', 
-         'App::PropertyMaterial',
-         'App::PropertyMaterialList', 
-         'App::PropertyPath', 
-         'App::PropertyFile', 
-         'App::PropertyFileIncluded',
-         'App::PropertyPythonObject',  
-         'App::PropertyExpressionEngine',  
-         'Part::PropertyPartShape',
-         'Part::PropertyGeometryList', 
-         'Part::PropertyShapeHistory', 
-         'Part::PropertyFilletEdges',
-         'Points::PropertyGreyValue', 
-         'Points::PropertyGreyValueList', 
-         'Points::PropertyNormalList',
-         'Points::PropertyCurvatureList', 
-         'Points::PropertyPointKernel', 
-         'Mesh::PropertyNormalList',
-         'Mesh::PropertyCurvatureList', 
-         'Mesh::PropertyMeshKernel']
-         '''
+    def onDocumentRestored(self, obj):
+        self.setProperties(obj)
 
     def addString(self, modulelist):
         stringName = "String" + str(self.StringCount)
         self.obj.addProperty("App::PropertyIntegerList",
                              stringName,
                              "Setup",
-                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                             "String: " + stringName
                              )
         setattr(self.obj, stringName, modulelist)
 
@@ -185,8 +100,8 @@ class _StringSetup:
                              "Outputs",
                              QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                              )
+        setattr(self.obj, stringName + "_Power", len(modulelist) * 450)
         '''
-        #setattr(self.obj, stringName + "_Power", len(modulelist) * 450)
         self.obj.NumberOfStrings = self.StringCount
         self.StringCount += 1
 
@@ -267,80 +182,174 @@ class _SelObserver:
         self.form = form
 
     def addSelection(self, doc, obj, sub, pnt):
-        '''
-        if self.disableObserver:
-            return
-        FreeCAD.Console.PrintLog("FSO-AddSel:" + str(obj) + ":" + str(sub) + "\n")
-        # if len(sub) == 0 and obj == FSSelectionFilterGate.lastobj:
-        #  self.dialog.addSelection(FSSelectionFilterGate.lastedge)
-        if sub[0:4] == 'Edge':
-            self.dialog.addSelectionEdge(obj, sub)
-        elif sub[0:4] == 'Face':
-            self.dialog.addSelectionFace(obj, sub)
-        return True'''
-        print(doc, "\n", obj, "\n", sub, "\n", pnt)
-
         rack = FreeCAD.ActiveDocument.getObjectsByLabel(obj)[0].Shape
         modules = rack.SubShapes[0].SubShapes[0].SubShapes
         if sub[0:4] == 'Face':
             numFace = int(sub.replace('Face', '')) - 1
-            selface = rack.Faces[numFace]
+            selFace = rack.Faces[numFace]
             for module in modules:
                 for num, face in enumerate(module.Faces):
-                    if selface.isSame(face):
+                    if selFace.isSame(face):
+                        self.form.setModule(modules.index(module))
+                        FreeCADGui.Selection
+                        return True
+
+        elif sub[0:4] == 'Edge':
+            numEdge = int(sub.replace('Edge', '')) - 1
+            selEdge = rack.Edge[numEdge]
+            for module in modules:
+                for num, edge in enumerate(module.Edges):
+                    if selEdge.isSame(edge):
                         print("Encontrado: ", modules.index(module))
-
-        '''
-        if (info["State"] == "UP") and (info["Button"] == 'BUTTON1'):
-            sel = FreeCADGui.Selection.getSelectionEx()
-            if len(sel) > 0:
-                rack = FreeCAD.ActiveDocument.Tracker.Shape
-                modules = rack.SubShapes[0].SubShapes[0].SubShapes
-                obj = sel[0].SubObjects[0]
-                for module in modules:
-                    for face in module.Faces:
-                        if obj.isSame(face):
-                            print("Encontrado: ", modules.index(module))
-                            return'''
-
-
+                        return True
+        return True
 
     def removeSelection(self, doc, obj, sub):  # Delete the selected object
-        print("FSO-RemSel:" + str(obj) + ":" + str(sub) + "\n")
+        '''print("FSO-RemSel:" + str(obj) + ":" + str(sub) + "\n")'''
+        return True
 
     def setSelection(self, doc):  # Selection in ComboView
-        print("FSO-SetSel:" + "\n")
+        '''print("FSO-SetSel:" + "\n")'''
+        return True
 
     def clearSelection(self, doc):  # If click on the screen, clear the selection
-        print("FSO-ClrSel:" + "\n")
+        '''print("FSO-ClrSel:" + "\n")'''
+        return True
 
 class _StringSetupPanel:
     def __init__(self, obj=None):
+        self.obj = obj
+        self.new = False
+
         if obj is None:
             self.new = True
             self.obj = makeStringSetup()
-        else:
-            self.new = False
-            self.obj = obj
+
         self.form = FreeCADGui.PySideUic.loadUi(__dir__ + "/PVPlantStringSetup.ui")
+        self.form.buttonSelFrame.clicked.connect(self.selFrame)
+        self.form.buttonAddString.clicked.connect(self.addString)
+        self.form.listStrings.currentRowChanged.connect(self.listStringsCurrentRowChanged)
+        self.form.editName.editingFinished.connect(self.setStringName)
 
         self.selobserver = _SelObserver(self)
+        self.stringslist = []
+        self.currentstring = 0
+        self.totalModules = 0
+        self.left = 0
+
+        self.frameColor = None
+
+    def selFrame(self):
+        sel = FreeCADGui.Selection.getSelection()
+        frame = None
+        if len(sel) == 0:
+            # TODO: lanzar un error
+            return
+        elif len(sel) == 1:
+            frame = sel[0]
+        else:
+            for obj in sel:
+                if not hasattr(obj, 'Proxy'):
+                    continue
+                print(obj.Proxy.__class__)
+                print(issubclass(obj.Proxy.__class__, PVPlantRack._Frame))
+                if issubclass(obj.Proxy.__class__, PVPlantRack._Frame):
+                    frame = obj
+                    break
+
+        if frame == None:
+            # TODO: lanzar un error
+            print("No frame selected")
+            return
+
+        self.frame = frame
+        self.form.editFrame.setText(frame.Label)
+        self.totalModules = frame.ModuleCols * frame.ModuleRows
+        self.left = self.totalModules
+        self.form.editTotal.setText(str(int(self.totalModules)))
+        self.form.editUsed.setText("0")
+        self.form.editLeft.setText(str(int(self.left)))
+
+        FreeCADGui.Selection.removeObserver(self.selobserver)
         FreeCADGui.Selection.addObserver(self.selobserver)
 
+        self.frameColor = self.obj.ViewObject.ShapeColor
+        self.colorlist = []
+        for face in self.frame.Shape.Faces:
+            self.colorlist.append((1.0, 0.50, 0.40, 0.25))
+        self.frame.ViewObject.DiffuseColor = self.colorlist
+
+    def addString(self):
+        FreeCADGui.Selection.clearSelection()
+        self.stringslist.append([])
+        self.currentstring = len(self.stringslist) - 1
+        self.form.listStrings.addItem("String" + str(self.form.listStrings.count()))
+        self.form.listStrings.setCurrentRow(self.form.listStrings.count() - 1)
+
+    def listStringsCurrentRowChanged(self, row):
+        self.currentstring = row
+        self.form.listModules.clear()
+        for num in self.stringslist[row]:
+            self.form.listModules.addItem(str(num))
+
+    def setModule(self, numModule):
+        if len(self.stringslist) == 0:
+            return
+
+        if self.left == 0:
+            return
+
+        if numModule in self.stringslist[self.currentstring]:
+            '''remove module ?? '''
+            self.stringslist[self.currentstring].remove(int(numModule))
+            item = self.form.listModules.findItems(str(numModule), QtCore.Qt.MatchExactly)[0]
+            self.form.listModules.takeItem(self.form.listModules.row(item))
+            for moduleFace in self.frame.Shape.Solids[numModule].Faces:
+                for i, face in enumerate(self.frame.Shape.Faces):
+                    if moduleFace.isEqual(face):
+                        self.colorlist[i] = (1.0, 0.50, 0.40, 0.25)
+                        self.frame.ViewObject.DiffuseColor = self.colorlist
+                        break
+        else:
+            self.stringslist[self.currentstring].append(int(numModule))
+            self.form.listModules.addItem(str(numModule))
+            for moduleFace in self.frame.Shape.Solids[numModule].Faces:
+                for i, face in enumerate(self.frame.Shape.Faces):
+                    if moduleFace.isEqual(face):
+                        self.colorlist[i] = (0.0, 0.0, 1.0, 0.0)
+                        self.frame.ViewObject.DiffuseColor = self.colorlist
+                        break
+
+
+        self.calculateModules()
+
+    def calculateModules(self):
+        num = 0
+        for string in self.stringslist:
+            num += len(string)
+
+        self.left = int(self.totalModules - num)
+        self.form.editUsed.setText(str(num))
+        self.form.editLeft.setText(str(self.left))
+
+    def setStringName(self):
+        self.obj.Label = self.form.editName.text()
 
     def accept(self):
+        for string in self.stringslist:
+            self.obj.Proxy.addString(string.copy())
         self.FormClosing()
         return True
 
     def reject(self):
+        FreeCAD.ActiveDocument.removeObject(self.obj.Name)
         self.FormClosing()
         return True
 
     def FormClosing(self):
         FreeCADGui.Selection.removeObserver(self.selobserver)
         FreeCADGui.Control.closeDialog()
-
-
+        self.frame.ViewObject.DiffuseColor = self.frameColor
 
 def makeString(base=None):
     if base is None:
@@ -420,7 +429,6 @@ class _String(ArchComponent.Component):
             if not (obj.Frame is None) and not (obj.StringSetup is None):
                 JuntionBoxPosition = 200
                 portrait = obj.Frame.ModuleOrientation == "Portrait"
-
                 cableLength = 1200
                 if hasattr(obj.Frame, "PoleCableLength"):
                     cableLength = obj.Frame.PoleCableLength.Value
@@ -442,7 +450,21 @@ class _String(ArchComponent.Component):
                 negativeMC4 = Part.Shape()
                 negativeMC4.read(os.path.join(Dir3dObjects, "MC4 NEGATIVE.IGS"))
 
-                for stringnum in range(obj.StringSetup.NumberOfStrings):
+                vec = None
+                if obj.Frame.Route:
+                    vertexes = obj.Frame.Route.Shape.Vertexes
+                    vec = vertexes[1].Point - vertexes[0].Point
+                else:
+                    poles = obj.Frame.Shape.SubShapes[1].SubShapes
+                    vec = poles[1].BoundBox.Center - poles[0].BoundBox.Center
+                vecp= FreeCAD.Vector(-vec.y, vec.x, vec.z)
+            # V1:
+            for stringnum in range(obj.StringSetup.NumberOfStrings):
+                ''''''
+
+            return
+            # V0:
+            for stringnum in range(obj.StringSetup.NumberOfStrings):
                     string = obj.StringSetup.getPropertyByName("String" + str(stringnum + 1))
                     total = len(string) - 1
                     dir = 0
@@ -505,6 +527,7 @@ class _ViewProviderString(ArchComponent.ViewProviderComponent):
 
 
 class _CommandStringSetup:
+
     def GetResources(self):
         return {'Pixmap': str(os.path.join(DirIcons, "stringsetup.svg")),
                 'Accel': "E, C",

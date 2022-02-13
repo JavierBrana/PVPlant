@@ -59,6 +59,25 @@ from openpyxl.styles import Alignment, Border, Side, PatternFill, GradientFill, 
 def makeBOQElectrical():
     ''' create a excel '''
 
+    # export layout to Excel:
+
+    # V0:
+    import PVPlantPlacement
+
+    sel = FreeCADGui.Selection.getSelection()
+    MaxY = max(sel, key=lambda obj: obj.Placement.Base.y)
+    MinY = min(sel, key=lambda obj: obj.Placement.Base.y)
+    MaxX = max(sel, key=lambda obj: obj.Placement.Base.x)
+    MinX = max(sel, key=lambda obj: obj.Placement.Base.x)
+
+    cols = PVPlantPlacement.getCols(sel)
+    for col in cols:
+        for group in col:
+            for frame in group:
+                ''''''
+    return
+
+    # contour of selected object.  Convex Hull:
     import PVPlantUtils
     line = FreeCADGui.Selection.getSelection()[0]
     tmp = PVPlantUtils.makeProfileFromTerrein(line.Shape)

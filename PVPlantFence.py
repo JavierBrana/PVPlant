@@ -327,7 +327,7 @@ class _Fence(ArchComponent.Component):
 
         ########## Datos informativos:
         if not "NumberOfSections" in pl:
-            obj.addProperty("App::PropertyInteger",
+            obj.addProperty("App::PropertyQuantity",
                             "NumberOfSections",
                             "Output",
                             QT_TRANSLATE_NOOP("App::Property", "The number of sections the fence is built of"))
@@ -346,6 +346,13 @@ class _Fence(ArchComponent.Component):
                             "Output",
                             QT_TRANSLATE_NOOP("App::Property", "The number of posts used to build the fence"))
             obj.setEditorMode("Length", 1)
+
+        if not "Concrete" in pl:
+            obj.addProperty("App::PropertyVolume",
+                            "Concrete",
+                            "Output",
+                            "Concrete Volume")
+            obj.setEditorMode("Concrete", 1)
 
         if not "PlacementList" in pl:
             obj.addProperty("App::PropertyPlacementList",
@@ -388,26 +395,21 @@ class _Fence(ArchComponent.Component):
         site = PVPlantSite.get()
         land = site.Terrain.Shape
 
+        '''
         land_coppy = land.copy()
         land_coppy.Placement.Base -= site.Origin
         pathwire = pathwire.copy()
         pathwire.Placement.Base -= site.Origin
         proj = land_coppy.makeParallelProjection(pathwire, FreeCAD.Vector(0, 0, 1))
+        '''
+        proj = land.makeParallelProjection(pathwire, FreeCAD.Vector(0, 0, 1))
         pathwire = Part.Wire(proj.Edges)
 
         pathLength = pathwire.Length
         sectionLength = obj.Gap.Value
         postLength = obj.Post.Shape.BoundBox.XMax
-        allShapes = []
         postPlacements = []
         pathsegments = self.calculateSegments(obj, pathwire)
-
-        newversion = False
-        if newversion:
-            sections =  int(pathLength / sectionLength)
-            surplus = pathLength - (sections * sectionLength)
-
-
 
         count = 0
         drawFirstPost = True
@@ -432,20 +434,22 @@ class _Fence(ArchComponent.Component):
 
             postPlacements.extend(placements)
 
-        obj.NumberOfSections = count
-        obj.NumberOfPosts = obj.NumberOfSections + 1
-        obj.Length = pathLength
+
 
         postShapes, postFoundation = self.calculatePosts(obj, postPlacements)
         sections, num = self.calculateSections(obj, postPlacements)
 
-        allShapes.extend(postShapes)
-        allShapes.extend(postFoundation)
-        allShapes.extend(sections)
-
-        compound = Part.makeCompound(allShapes)
+        postShapes = Part.makeCompound(postShapes)
+        postFoundation = Part.makeCompound(postFoundation)
+        sections = Part.makeCompound(sections)
+        compound = Part.makeCompound([postShapes, postFoundation, sections])
         obj.Shape = compound
-        obj.Placement.Base += site.Origin
+
+        # Give information
+        obj.NumberOfSections = count
+        obj.NumberOfPosts = obj.NumberOfSections + 1
+        obj.Length = pathLength
+        obj.Concrete = count * postFoundation.SubShapes[0].Volume
 
     def calculateSegments(self, obj, pathwire):
         import math
@@ -486,7 +490,7 @@ class _Fence(ArchComponent.Component):
                 print(placements)
                 print("-----------------------------------------------------\n")
         else:
-            placements = calculatePlacementsOnPath(rotation, pathwire, obj.NumberOfSections + 1, transformationVector, True)
+            placements = calculatePlacementsOnPath(rotation, pathwire, int(obj.NumberOfSections) + 1, transformationVector, True)
             # The placement of the last object is always the second entry in the list.
             # So we move it to the end
             placements.append(placements.pop(1))
@@ -559,6 +563,7 @@ class _ViewProviderFence(ArchComponent.ViewProviderComponent):
 
     def __init__(self, vobj):
         ArchComponent.ViewProviderComponent.__init__(self, vobj)
+        self.Object = vobj
 
     def getIcon(self):
         return str(os.path.join(DirIcons, "fence.svg"))
@@ -567,7 +572,6 @@ class _ViewProviderFence(ArchComponent.ViewProviderComponent):
         '''
         Create Object visuals in 3D view.
         '''
-
         # GeoCoords Node.
         self.geo_coords = coin.SoGeoCoordinate()
 
@@ -611,28 +615,21 @@ class _ViewProviderFence(ArchComponent.ViewProviderComponent):
         base = copy.deepcopy(origin.Origin)
         base.z = 0
         print("  - Propiedad: ", prop)
-
         if prop == "Shape":
             shape = obj.getPropertyByName(prop)
-
             # Get GeoOrigin.
             points = [ver.Point for ver in shape.Vertexes]
-
             # Set GeoCoords.
             geo_system = ["UTM", origin.UtmZone, "FLAT"]
             self.geo_coords.geoSystem.setValues(geo_system)
             self.geo_coords.point.values = points
 
-
     def claimChildren(self):
         children = []
-
         if self.Object.Post:
             children.append(self.Object.Post)
-
         if self.Object.Base:
             children.append(self.Object.Base)
-
         return children
 
 class _FenceTaskPanel:

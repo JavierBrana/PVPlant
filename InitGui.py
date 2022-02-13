@@ -31,23 +31,25 @@ class PVPlantWorkbench (Workbench):
 
     MenuText = "PVPlant Workbench"
     ToolTip = "A description of my workbench"
-    Icon = str(os.path.join(DirIcons, "solar-panel.svg"))
+    Icon = str(os.path.join(DirIcons, "icon.svg"))
 
     def Initialize(self):
 
         # Mias
         import PVPlantGeoreferencing,  PVPlantRack, PVPlantPlacement, \
-            PVPlantTerrainAnalisys, PVPlantSite, PVPlantImportGrid,PVPlantFence,\
+            PVPlantArea, \
+            PVPlantTerrainAnalisys, PVPlantSite, PVPlantImportGrid, PVPlantFence,\
             PVPlantFoundation, PVPlantCreateTerrainMesh, \
-            PVPlantTreeGenerator, PVPlantTrench, PVPEarthWorks, \
+            PVPlantTreeGenerator, PVPlantBuilding, PVPlantTrench, PVPlantEarthWorks, \
             PVPlantStringBox, PVPlantCable, PVPlantStringing, \
-            PVPlantPad, PVPlantRoad, PVPlantTerrain, PVPlantArea, \
+            PVPlantPad, PVPlantRoad, PVPlantTerrain, PVPlantArea, PVPlantManhole, \
             exportPVSyst, PVPlantBOQMechanical, PVPlantBOQElectrical, PVPlantBOQCivil,\
             GraphProfile, \
             reload
 
         # A list of command names created in the line above
         self.list = ["Reload",
+                     "PVPlantAreas",
                      "PVPlantSite",
                      "PVPlantGeoreferencing",
                      #"ImportGrid",
@@ -59,6 +61,8 @@ class PVPlantWorkbench (Workbench):
                      "PVPlantEarthworks",
                      "PVPlantPad",
                      "PVPlantRoad",
+                     "PVPlantManhole",
+                     #"PVPlantFoundation"
                      "GraphTerrainProfile",
                      ]
         self.list1 = [
@@ -71,6 +75,7 @@ class PVPlantWorkbench (Workbench):
 
         self.list2 = [
                     "PVPlantTree",
+                    "PVPlantBuilding",
                     "PVPlantFenceGroup",
                     ]
 

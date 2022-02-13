@@ -27,26 +27,17 @@ except AttributeError:
 import PVPlantResources
 
 
-def makeOffset(trackerPath, offset):
-    pts = []
-    for point in trackerPath.Points:
-        tmp = FreeCAD.Vector(point.x, point.y, point.z + offset)
-        pts.append(tmp)
-    limit = Part.makePolygon(pts)
-
-    # placement = trackerPath.Placement
-    # limit = FreeCAD.ActiveDocument.copyObject(trackerPath, False)
-    # limit.Placement = placement
-    # limit.Placement.Base.z += offset
-    # limit.ViewObject.PointSize = 5.00
-    # limit.ViewObject.LineWidth = 5.00
-
-    return limit
-
-
 def VertexesToPoints(Vertexes):
     return [ver.Point for ver in Vertexes]
 
+def makeOffset(trackerPath, offset):
+    pts = []
+    for ver in trackerPath.Shape.Vertexes:
+        point = ver.Point
+        tmp = FreeCAD.Vector(point.x, point.y, point.z + offset)
+        pts.append(tmp)
+    limit = Part.makePolygon(pts)
+    return limit
 
 '''
 ------------------------------------------------------------------------------------------------------------------------
@@ -140,16 +131,16 @@ def calculateEarthWorks(trackerPath, Terrain, offsetup=200, offsetdown=200):
     Cuts = None
     Fills = None
     newPath = None
-
+    if offsetup == 0:
+        offsetup = 1
+    if offsetdown == 0:
+        offsetdown = 1
     limitTop = makeOffset(trackerPath, offsetup)
     limitBottom = makeOffset(trackerPath, -offsetdown)
 
     points3D = []
     if Terrain.isDerivedFrom("Part::Feature"):
-        if True:
-            tmp_pts = Terrain.Shape.makeParallelProjection(trackerPath.Shape.Wires[0], FreeCAD.Vector(0, 0, 1))
-        else:
-            tmp_pts = Terrain.Shape.project([trackerPath.Shape.Wires[0], ])
+        tmp_pts = Terrain.Shape.makeParallelProjection(trackerPath.Shape.Wires[0], FreeCAD.Vector(0, 0, 1))
         points3D = [ver.Point for ver in tmp_pts.Vertexes]
     elif Terrain.isDerivedFrom("Mesh::Feature"):
         import MeshPart as mp
@@ -157,27 +148,27 @@ def calculateEarthWorks(trackerPath, Terrain, offsetup=200, offsetdown=200):
 
     points3D = sorted(points3D, key=lambda k: k.y, reverse=True)
     terrainProfile = Part.makePolygon(points3D)
-    #Part.show(terrainProfile)
+    # Part.show(terrainProfile)
 
     sectionTop = terrainProfile.section(limitTop)
     crossTopPoints = VertexesToPoints(sectionTop.Vertexes)
     cutPoints, PointList = getCuts(crossTopPoints, points3D)
 
-    #### Prueba:
+    # Prueba:
     '''
     lT = Part.Wire([limitTop.Vertexes[0].Point, limitTop.Vertexes[1].Point])
     tP = Part.Wire(points3D)
     '''
 
-
     Cuts = []
     for i in cutPoints:
         Cuts.extend(i)
-        '''
+
         Cut = Draft.makeWire(i, closed=True, face=None, support=None)
         Cut.Label = "CutSections"
         Cut.ViewObject.LineColor = (1.00, 0.00, 0.00)
         Cut.ViewObject.ShapeColor = (1.00, 0.00, 0.00)
+        '''
         Cuts.append(Cut)
         '''
 
@@ -188,18 +179,19 @@ def calculateEarthWorks(trackerPath, Terrain, offsetup=200, offsetdown=200):
     Fills = []
     for i in fillPoints:
         Fills.extend(i)
-        '''
+
         Fill = Draft.makeWire(i, closed=True, face=None, support=None)
         Fill.Label = "FillSections"
         Fill.ViewObject.LineColor = (0.00, 0.33, 1.00)
         Fill.ViewObject.ShapeColor = (0.00, 0.33, 1.00)
+        '''
         Fills.append(Fill)
         '''
 
     PointList = sorted(PointList, key=lambda k: k.y, reverse=(trackerPath.Shape.Vertexes[-1].Point.y <
                                                               trackerPath.Shape.Vertexes[0].Point.y))
-    #newPath = Draft.makeWire(PointList, closed=False, face=None)
-    #newPath.Label = trackerPath.Label + "_NewPath"
+    # newPath = Draft.makeWire(PointList, closed=False, face=None)
+    # newPath.Label = trackerPath.Label + "_NewPath"
 
     return Cuts, Fills, newPath
 
@@ -263,40 +255,56 @@ def makeMesh(Points, MaxlengthLE=10000):
     Surface.Mesh = MeshObject
     return Surface
 
+class _EarthWorksTaskPanel:
+    def __init__(self):
+        import os
 
-# TODO: Make it a form to setup all the variables:
-def _EarthWorksTaskPanel():
-    from datetime import datetime
-    starttime = datetime.now()
+        self.To = None
 
-    FreeCAD.ActiveDocument.openTransaction("Calculate EarthWorks")
+        # self.form:
+        self.form = FreeCADGui.PySideUic.loadUi(os.path.join(PVPlantResources.__dir__, "PVPlantEarthworks.ui"))
+        self.form.setWindowIcon(QtGui.QIcon(os.path.join(PVPlantResources.DirIcons, "convert.svg")))
 
-    sel = FreeCADGui.Selection.getSelection()
-    # TODO: check if selection objects are frames and get their placement axis
+    def accept(self):
+        from datetime import datetime
+        starttime = datetime.now()
 
-    terrain = FreeCAD.ActiveDocument.Site.Terrain
+        FreeCAD.ActiveDocument.openTransaction("Calculate EarthWorks")
+        terrain = FreeCAD.ActiveDocument.Site.Terrain
+        sel = FreeCADGui.Selection.getSelection()
+        # TODO: check if selection objects are frames and get their placement axis
 
-    Cuts = []
-    Fills = []
-    newPaths = []
-    for obj in sel:
-        cut, fill, newpath = calculateEarthWorks(obj, terrain)
-        if not (cut is None):
-            Cuts.extend(cut)
-        '''
-        if not (fill is None):
-            Fills.append(fill.Points)
-            makeMesh(pointsfromlines(Fills))
-        if not (newpath is None):
-            newPaths.append(newpath.Points)
-            makeMesh(pointsfromlines(newPaths), 0)
-        '''
-    makeMesh(Cuts)
-    FreeCAD.activeDocument().recompute()
+        Cuts = []
+        Fills = []
+        newPaths = []
+        for obj in sel:
+            cut, fill, newpath = calculateEarthWorks(obj, terrain,
+                                                     self.form.editToleranceCut.value(),
+                                                     self.form.editToleranceFill.value())
+            if not (cut is None):
+                Cuts.extend(cut)
+            '''
+            if not (fill is None):
+                Fills.append(fill.Points)
+                makeMesh(pointsfromlines(Fills))
+            if not (newpath is None):
+                newPaths.append(newpath.Points)
+                makeMesh(pointsfromlines(newPaths), 0)
+            '''
+        #makeMesh(Cuts)
+        FreeCAD.activeDocument().recompute()
 
-    total_time = datetime.now() - starttime
-    print(" -- Tiempo tardado:", total_time)
+        total_time = datetime.now() - starttime
+        print(" -- Tiempo tardado:", total_time)
+        self.closeForm()
+        return True
 
+    def reject(self):
+        self.closeForm()
+        return True
+
+    def closeForm(self):
+        FreeCADGui.Control.closeDialog()
 
 def pointsfromlines(paths):
     points = []
@@ -315,7 +323,8 @@ class _CommandCalculateEarthworks:
                 'ToolTip': QT_TRANSLATE_NOOP("Placement", "Calcular el movimiento de tierras")}
 
     def Activated(self):
-        _EarthWorksTaskPanel()
+        TaskPanel = _EarthWorksTaskPanel()
+        FreeCADGui.Control.showDialog(TaskPanel)
 
     def IsActive(self):
         if FreeCAD.ActiveDocument:

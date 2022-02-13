@@ -71,11 +71,9 @@ class _Trench(ArchComponent.Component):
         # Definición de Variables:
         ArchComponent.Component.__init__(self, obj)
         self.setProperties(obj)
+        self.obj = obj
 
         self.route = False
-
-        obj.IfcType = "Civil Element"  ## puede ser: Cable Carrier Segment
-        #obj.setEditorMode("IfcType", 1)
 
     def setProperties(self, obj):
         # Definicion de Propiedades:
@@ -159,24 +157,40 @@ class _Trench(ArchComponent.Component):
         'Sketcher::PropertyConstraintList'
         ]'''
 
-        obj.addProperty("App::PropertyLength",
-                        "Width",
-                        "Trench",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Width = 300
+        pl = obj.PropertiesList
 
-        obj.addProperty("App::PropertyLength",
-                        "Height",
-                        "Trench",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Height = 700
+        # Editable properties:
+        if not ("Width" in pl):
+            obj.addProperty("App::PropertyLength",
+                            "Width",
+                            "Trench",
+                            QT_TRANSLATE_NOOP("App::Property", "Connection")).Width = 800
 
-        obj.addProperty("App::PropertyLength",
-                        "Sand_Height",
-                        "Trench",
-                        QT_TRANSLATE_NOOP("App::Property", "Connection")).Sand_Height = 400
+        if not ("Height" in pl):
+            obj.addProperty("App::PropertyLength",
+                            "Height",
+                            "Trench",
+                            QT_TRANSLATE_NOOP("App::Property", "Connection")).Height = 1200
 
-        self.obj = obj
+        # Outputs: ------------------------
+        if not ("Length" in pl):
+            obj.addProperty("App::PropertyLength",
+                            "Length",
+                            "Outputs",
+                            "Length")
+        obj.setEditorMode("Length", 1)
+
+        if not ("Volume" in pl):
+            obj.addProperty("App::PropertyVolume",
+                            "Volume",
+                            "Outputs",
+                            "Volume")
+        obj.setEditorMode("Volume", 1)
+
         self.Type = "Trench"
         obj.Proxy = self
+        obj.IfcType = "Civil Element"  ## puede ser: Cable Carrier Segment
+        # obj.setEditorMode("IfcType", 1)
 
     def onDocumentRestored(self, obj):
         """Method run when the document is restored.
@@ -189,36 +203,55 @@ class _Trench(ArchComponent.Component):
         import Part, DraftGeomUtils, math
         import Draft
 
+        def makeoffsets(w1, width):
+            import DraftGeomUtils
+            vec = w1.Vertexes[1].Point - w1.Vertexes[0].Point
+            vec1 = FreeCAD.Vector(vec.y, -vec.x, 0)
+            vec1 = vec1.normalize()
+            vec1.Length = width / 2
+            off1 = DraftGeomUtils.offsetWire(w1.Wires[0], vec1)
+            vec1.Length = -width / 2
+            off2 = DraftGeomUtils.offsetWire(w1.Wires[0], vec1)
+            return off1, off2
+
+        obj.Base.Visibility = False
         w = self.calculatePathWire(obj)
         land = FreeCAD.ActiveDocument.Site.Terrain.Shape
         w = Part.Wire(land.makeParallelProjection(w, FreeCAD.Vector(0, 0, 1)).Edges)
-        Part.show(w, "Projected_wire")
+        #Part.show(w, "Projected_wire")
 
-        vec_down_left = FreeCAD.Vector(-obj.Width.Value / 2, 0, -obj.Height.Value)
-        vec_down_right = FreeCAD.Vector(obj.Width.Value / 2, 0, -obj.Height.Value)
-        vec_up_left = FreeCAD.Vector(-obj.Width.Value / 2, 0, 0)
-        vec_up_right = FreeCAD.Vector(obj.Width.Value / 2, 0, 0)
-        vec_sand_left = FreeCAD.Vector(-obj.Width.Value / 2, 0, -obj.Height.Value + obj.Sand_Height.Value)
-        vec_sand_right = FreeCAD.Vector(obj.Width.Value / 2, 0, -obj.Height.Value + obj.Sand_Height.Value)
+        # Opción 2: Con offset:
+        pts = [ver.Point for ver in w.Vertexes]
+        for point in pts:
+            point.z = 0
+        w1 = Part.makePolygon(pts)
+        off1, off2 = makeoffsets(w1, obj.Width.Value)
+        off1 = [ver.Point for ver in off1.Vertexes]
+        off2 = [ver.Point for ver in off2.Vertexes]
 
+        h = obj.Height.Value
+        for i in range(len(w.Vertexes)):
+            off1[i].z = w.Vertexes[i].Point.z - h
+            off2[i].z = w.Vertexes[i].Point.z - h
 
-        # 1. Perfil original del cual salen todos los demás:
-        p = Part.makePolygon([vec_down_left, vec_down_right])
-        p = Part.makePolygon([vec_down_left, vec_down_right, vec_up_right, vec_up_left, vec_down_left])
-        c = (vec_up_right + vec_up_left) / 2
-        delta = w.Vertexes[0].Point - c
-        p.translate(delta)
-        Part.show(p, "P")
-        sh = w.makePipeShell([p, ], True, True, 2)
-        Part.show(sh)
+        #h *= 2
+        pols = []
+        for i, ver in enumerate(w.Vertexes):
+            pol = Part.makePolygon([off1[i], off1[i] + FreeCAD.Vector(0, 0, h),
+                                    off2[i] + FreeCAD.Vector(0, 0, h), off2[i],
+                                    ])
+            pols.append(pol.Wires[0])
 
-        return
-        shapes = []
-        p = Part.makePolygon([vec_down_left, vec_down_right, vec_up_right, vec_up_left, vec_down_left])
-        fill = self.calculateLoft(obj, p, c, w)
-        shapes.append(fill)
+        sh = Part.makeLoft(pols, True, True)
+        #land = FreeCAD.ActiveDocument.Terrain.Shape
+        #common = sh.common(land)
+        #Part.show(common)
+        #common = common.extrude(FreeCAD.Vector(0, 0, h))
+        #sh = sh.cut(common)
 
-        obj.Shape = Part.makeCompound(shapes)
+        obj.Shape = Part.makeCompound([sh, w])
+        obj.Volume = sh.Volume
+        obj.Length = w.Length
 
     def calculatePathWire(self, obj):
         if obj.Base:
@@ -235,7 +268,6 @@ class _Trench(ArchComponent.Component):
         import DraftGeomUtils
         shapes = []
         usenew = False
-
 
         delta = wire.Vertexes[0].Point - center
         profile.translate(delta)
@@ -268,28 +300,6 @@ class _ViewProviderTrench(ArchComponent.ViewProviderComponent):
     def getIcon(self):
         return str(os.path.join(PVPlantResources.DirIcons, "trench.svg"))
 
-class _TrenchTaskPanel:
-
-    def __init__(self, obj=None):
-
-        if obj is None:
-            self.new = True
-            self.obj = makeTrench()
-        else:
-            self.new = False
-            self.obj = obj
-
-        self.form = FreeCADGui.PySideUic.loadUi(os.path.join(PVPlantResources.__dir__, "PVPlantTrench.ui"))
-
-    def accept(self):
-        FreeCADGui.Control.closeDialog()
-        return True
-
-    def reject(self):
-        FreeCAD.ActiveDocument.removeObject(self.obj.Name)
-        if self.new:
-            FreeCADGui.Control.closeDialog()
-        return True
 
 
 import sys
@@ -308,11 +318,288 @@ from draftutils.messages import _msg, _err
 from draftutils.translate import translate
 
 
-class _CommandTrench(gui_base_original.Creator):
+class _TrenchTaskPanel:
+    def __init__(self, obj=None):
+        self.obj = obj
+        self.new = False
+
+        if obj is None:
+            self.new = True
+
+        self.form = FreeCADGui.PySideUic.loadUi(os.path.join(PVPlantResources.__dir__, "PVPlantTrench.ui"))
+        self.form.buttonAddLayer.clicked.connect(self.addLayer)
+        self.form.buttonDeleteLayer.clicked.connect(self.removeLayer)
+        self.form.buttonUp.clicked.connect(self.moveUp)
+        self.form.buttonDown.clicked.connect(self.moveDown)
+
+        self.path = None
+        self.ui = None
+        self.node = []
+        self.pos = None
+        self.support = None
+        self.info = None
+        self.view = FreeCADGui.ActiveDocument.ActiveView
+        #self.call = self.view.addEventCallback("SoEvent", self.action)
+
+    def action(self, arg):
+        """Handle the 3D scene events.
+
+        This is installed as an EventCallback in the Inventor view.
+
+        Parameters
+        ----------
+        arg: dict
+            Dictionary with strings that indicates the type of event received
+            from the 3D view.
+        """
+
+        print(arg)
+
+        if arg["Type"] == "SoKeyboardEvent" and arg["Key"] == "ESCAPE":
+            self.finish()
+
+        elif arg["Type"] == "SoLocation2Event":
+            self.point, ctrlPoint, self.info = gui_tool_utils.getPoint(self, arg)
+            gui_tool_utils.redraw3DView()
+
+        elif (arg["Type"] == "SoMouseButtonEvent" and
+              arg["State"] == "DOWN" and
+              arg["Button"] == "BUTTON1"):
+
+            if arg["Position"] == self.pos:
+                return self.finish(False, cont=True)
+
+            if (not self.node) and (not self.support):
+                gui_tool_utils.getSupport(arg)
+                self.point, ctrlPoint, self.info = gui_tool_utils.getPoint(self, arg)
+                print(gui_tool_utils.getPoint(self, arg))
+
+            if self.point:
+                self.point = FreeCAD.Vector(self.info["x"], self.info["y"], self.info["z"])
+                # self.ui.redraw()
+                self.pos = arg["Position"]
+                self.node.append(self.point)
+                self.drawSegment(self.point)
+                if len(self.node) > 2:
+                    # The wire is closed
+                    if (self.point - self.node[0]).Length < utils.tolerance():
+                        self.undolast()
+                        if len(self.node) > 2:
+                            self.finish(True, cont=True)
+                        else:
+                            self.finish(False, cont=True)
+
+    def finish(self, closed=False, cont=False):
+        """Terminate the operation and close the polyline if asked.
+
+        Parameters
+        ----------
+        closed: bool, optional
+            Close the line if `True`.
+        """
+        self.removeTemporaryObject()
+        if self.oldWP:
+            App.DraftWorkingPlane = self.oldWP
+            if hasattr(Gui, "Snapper"):
+                Gui.Snapper.setGrid()
+                Gui.Snapper.restack()
+        self.oldWP = None
+
+        if len(self.node) > 1:
+
+            if True:
+                FreeCADGui.addModule("Draft")
+                # The command to run is built as a series of text strings
+                # to be committed through the `draftutils.todo.ToDo` class.
+                if (len(self.node) == 2
+                        and utils.getParam("UsePartPrimitives", False)):
+                    # Insert a Part::Primitive object
+                    p1 = self.node[0]
+                    p2 = self.node[-1]
+
+                    _cmd = 'FreeCAD.ActiveDocument.'
+                    _cmd += 'addObject("Part::Line", "Line")'
+                    _cmd_list = ['line = ' + _cmd,
+                                 'line.X1 = ' + str(p1.x),
+                                 'line.Y1 = ' + str(p1.y),
+                                 'line.Z1 = ' + str(p1.z),
+                                 'line.X2 = ' + str(p2.x),
+                                 'line.Y2 = ' + str(p2.y),
+                                 'line.Z2 = ' + str(p2.z),
+                                 'Draft.autogroup(line)',
+                                 'FreeCAD.ActiveDocument.recompute()']
+                    self.commit(translate("draft", "Create Line"),
+                                _cmd_list)
+                else:
+                    # Insert a Draft line
+                    rot, sup, pts, fil = self.getStrings()
+
+                    _base = DraftVecUtils.toString(self.node[0])
+                    _cmd = 'Draft.makeWire'
+                    _cmd += '('
+                    _cmd += 'points, '
+                    _cmd += 'placement=pl, '
+                    _cmd += 'closed=' + str(closed) + ', '
+                    _cmd += 'face=' + fil + ', '
+                    _cmd += 'support=' + sup
+                    _cmd += ')'
+                    _cmd_list = ['pl = FreeCAD.Placement()',
+                                 'pl.Rotation.Q = ' + rot,
+                                 'pl.Base = ' + _base,
+                                 'points = ' + pts,
+                                 'line = ' + _cmd,
+                                 'Draft.autogroup(line)',
+                                 'FreeCAD.ActiveDocument.recompute()']
+                    self.commit(translate("draft", "Create Wire"),
+                                _cmd_list)
+            else:
+                import Draft
+                self.path = Draft.makeWire(self.node, closed=False, face=False)
+
+        if self.ui and self.ui.continueMode:
+            self.Activated()
+
+        self.makeTrench()
+
+    def removeTemporaryObject(self):
+        """Remove temporary object created."""
+        if self.obj:
+            try:
+                old = self.obj.Name
+            except ReferenceError:
+                # object already deleted, for some reason
+                pass
+            else:
+                todo.ToDo.delay(self.doc.removeObject, old)
+        self.obj = None
+
+    def undolast(self):
+        """Undoes last line segment."""
+        import Part
+        if len(self.node) > 1:
+            self.node.pop()
+            # last = self.node[-1]
+            if self.obj.Shape.Edges:
+                edges = self.obj.Shape.Edges
+                if len(edges) > 1:
+                    newshape = Part.makePolygon(self.node)
+                    self.obj.Shape = newshape
+                else:
+                    self.obj.ViewObject.hide()
+                # DNC: report on removal
+                # _msg(translate("draft", "Removing last point"))
+                _msg(translate("draft", "Pick next point"))
+
+    def drawSegment(self, point):
+        """Draws new line segment."""
+        import Part
+        if self.planetrack and self.node:
+            self.planetrack.set(self.node[-1])
+        if len(self.node) == 1:
+            _msg(translate("draft", "Pick next point"))
+        elif len(self.node) == 2:
+            last = self.node[len(self.node) - 2]
+            newseg = Part.LineSegment(last, point).toShape()
+            self.obj.Shape = newseg
+            self.obj.ViewObject.Visibility = True
+            _msg(translate("draft", "Pick next point"))
+        else:
+            currentshape = self.obj.Shape.copy()
+            last = self.node[len(self.node) - 2]
+            if not DraftVecUtils.equals(last, point):
+                newseg = Part.LineSegment(last, point).toShape()
+                newshape = currentshape.fuse(newseg)
+                self.obj.Shape = newshape
+            _msg(translate("draft", "Pick next point"))
+
+    def wipe(self):
+        """Remove all previous segments and starts from last point."""
+        if len(self.node) > 1:
+            # self.obj.Shape.nullify()  # For some reason this fails
+            self.obj.ViewObject.Visibility = False
+            self.node = [self.node[-1]]
+            if self.planetrack:
+                self.planetrack.set(self.node[0])
+            _msg(translate("draft", "Pick next point"))
+
+    def numericInput(self, numx, numy, numz):
+        """Validate the entry fields in the user interface.
+
+        This function is called by the toolbar or taskpanel interface
+        when valid x, y, and z have been entered in the input fields.
+        """
+        self.point = App.Vector(numx, numy, numz)
+        self.node.append(self.point)
+        self.drawSegment(self.point)
+        self.ui.setNextFocus()
+
+    def makeTrench(self):
+        makeTrench(self.path)
+
+    def addLayer(self):
+        num = self.form.listLayers.count() + 1
+        self.form.listLayers.addItem("Layer" + str(num))
+        # TODO: add property to obj
+        layer = "Layer" + str(num)
+        self.obj.addProperty("App::PropertyIntegerList",
+                             "Name",
+                             layer,
+                             layer + " Name"
+                             )
+        setattr(self.obj, "Name", layer)
+
+        self.obj.addProperty("App::PropertyIntegerList",
+                             "Description",
+                             layer,
+                             layer + " description"
+                             )
+
+        self.obj.addProperty("App::PropertyIntegerList",
+                             "Height",
+                             layer,
+                             layer + " Height"
+                             )
+        setattr(self.obj, "Heigth", 100)
+
+    def removeLayer(self):
+        # TODO: remove property to obj
+        currentRow = self.form.listLayers.currentRow()
+        currentItem = self.form.listLayers.takeItem(currentRow)
+        del(currentItem)
+
+    def moveUp(self):
+        currentRow = self.form.listLayers.currentRow()
+        currentItem = self.form.listLayers.takeItem(currentRow)
+        self.form.listLayers.insertItem(currentRow - 1, currentItem)
+
+    def moveDown(self):
+        currentRow = self.form.listLayers.currentRow()
+        currentItem = self.form.listLayers.takeItem(currentRow)
+        self.form.listLayers.insertItem(currentRow + 1, currentItem)
+
+    def accept(self):
+        self.closingForm()
+        return True
+
+    def reject(self):
+        if self.new:
+            FreeCAD.ActiveDocument.removeObject(self.obj.Name)
+        self.closingForm()
+        return True
+
+    def closingForm(self):
+        self.view.removeEventCallback("SoEvent", self.call)
+        FreeCADGui.Control.closeDialog()
+
+
+
+
+
+
+class _CommandTrench_V0(gui_base_original.Creator):
     """Gui command for the Line tool."""
 
     def __init__(self):
-        # super(_CommandTrench, self).__init__()
         gui_base_original.Creator.__init__(self)
         self.path = None
 
@@ -334,18 +621,18 @@ class _CommandTrench(gui_base_original.Creator):
         self.obj = None  # stores the temp shape
         self.oldWP = None  # stores the WP if we modify it
 
-        '''
+        """
         if sys.version_info.major < 3:
             if isinstance(self.featureName, unicode):
                 self.featureName = self.featureName.encode("utf8")
-        '''
+        """
 
         sel = FreeCADGui.Selection.getSelection()
         done = False
         self.existing = []
         if len(sel) > 0:
             print("Crear una zanja desde un objeto wire existente")
-            # TODO: chequear que el objeto seleccionado sea un "wire"
+            # TODO: buscar por el primer "WIRE" en los objetos seleccionados
             import Draft
             if Draft.getType(sel[0]) == "Wire":
                 self.path = sel[0]
@@ -371,19 +658,27 @@ class _CommandTrench(gui_base_original.Creator):
             Dictionary with strings that indicates the type of event received
             from the 3D view.
         """
+
+        print(arg)
+
         if arg["Type"] == "SoKeyboardEvent" and arg["Key"] == "ESCAPE":
             self.finish()
+
         elif arg["Type"] == "SoLocation2Event":
             self.point, ctrlPoint, self.info = gui_tool_utils.getPoint(self, arg)
             gui_tool_utils.redraw3DView()
-        elif (arg["Type"] == "SoMouseButtonEvent"
-              and arg["State"] == "DOWN"
-              and arg["Button"] == "BUTTON1"):
+
+        elif (arg["Type"] == "SoMouseButtonEvent" and
+              arg["State"] == "DOWN" and
+              arg["Button"] == "BUTTON1"):
+
             if arg["Position"] == self.pos:
                 return self.finish(False, cont=True)
+
             if (not self.node) and (not self.support):
                 gui_tool_utils.getSupport(arg)
                 self.point, ctrlPoint, self.info = gui_tool_utils.getPoint(self, arg)
+                print(gui_tool_utils.getPoint(self, arg))
 
             if self.point:
                 self.point = FreeCAD.Vector(self.info["x"], self.info["y"], self.info["z"])
@@ -568,6 +863,45 @@ class _CommandTrench(gui_base_original.Creator):
         self.node.append(self.point)
         self.drawSegment(self.point)
         self.ui.setNextFocus()
+
+
+class _CommandTrench: # V1:
+    """Gui command for the Line tool."""
+
+    def GetResources(self):
+        """Set icon, menu and tooltip."""
+        return {'Pixmap': str(os.path.join(DirIcons, "trench.svg")),
+                'MenuText': "Trench",
+                'Accel': "C, T",
+                'ToolTip': "Creates a Trench object from setup dialog."}
+
+    def IsActive(self):
+        if FreeCAD.ActiveDocument:
+            return True
+        else:
+            return False
+
+    def Activated(self):
+        """Execute when the command is called."""
+
+        sel = FreeCADGui.Selection.getSelection()
+        done = False
+
+        if len(sel) > 0:
+            print("Crear una zanja desde un objeto wire existente")
+            # TODO: buscar por el primer "WIRE" en los objetos seleccionados
+            import Draft
+            if Draft.getType(sel[0]) == "Wire":
+                path = sel[0]
+                makeTrench(path)
+                done = True
+
+        if not done:
+            TaskPanel = _TrenchTaskPanel()
+            if TaskPanel:
+                FreeCADGui.Control.showDialog(TaskPanel)
+            else:
+                print(" No ha sido posible crear el formulario")
 
 
 if FreeCAD.GuiUp:
