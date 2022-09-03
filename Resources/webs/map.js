@@ -16,7 +16,7 @@ var googleHybrid = L.tileLayer('http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z=
 
 var map = L.map('map', {
 	center: [0,0],
-	zoom: 2,
+	zoom: 6,
 	layers: [OpenStreetMap_Mapnik, googleSat, googleHybrid]
 	}).fitWorld();
 
@@ -87,6 +87,7 @@ map.on('draw:created', function(e) {
 
 
 // begin Kml Loader ------------------------------------------------------------------------------
+/*
 var kmlcontrol = L.Control.fileLayerLoad({
 	// Allows you to use a customized version of L.geoJson.
 	// For example if you are using the Proj4Leaflet leaflet plugin,
@@ -151,9 +152,7 @@ kmlcontrol.loader.on('data:loaded', function (e) {
 	// get saved to the form
 	store.save(drawnItems);
 });
+*/
 
 // end Kml Loader ------------------------------------------------------------------------------
-
-
-	
 	

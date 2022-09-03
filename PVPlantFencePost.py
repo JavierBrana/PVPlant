@@ -130,8 +130,6 @@ class _FencePost(ArchComponent.Component):
         vc11 = FreeCAD.Vector(-(L / 2 + obj.Thickness.Value), 0, 0)
         v21 = FreeCAD.Vector(-L / 2, 0, -obj.Thickness.Value)
 
-
-
         arc1 = Part.Arc(v1, vc1, v2).toShape()
         arc11 = Part.Arc(v11, vc11, v21).toShape()
         line1 = Part.LineSegment(v11, v1).toShape()

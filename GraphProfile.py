@@ -114,20 +114,18 @@ class _GraphProfile:
     def onChanged(self, obj, prop):
         '''Do something when a property has changed'''
 
+
         if prop == "Path":
             if obj.getPropertyByName(prop):
-                import PVPlantUtils
-                profile = PVPlantUtils.FlattenWire(PVPlantUtils.makeProfileFromTerrein(obj.Path.Shape))
-                obj.Points = [ver.Point for ver in profile.Vertexes]
+                from Utils import PVPlantUtils
+                profile = PVPlantUtils.FlattenWire(PVPlantUtils.makeProfileFromTerrain(obj.Path))
+                obj.Points = PVPlantUtils.getPointsFromVertexes(profile.Vertexes)
             else:
                 obj.Points.clear()
-
-
-
         print("Graph: onChanged")
 
     def execute(self, obj):
-        if obj.Path is None:
+        if (obj.Path is None) or (obj.Points is None):
             return
 
         profile = Part.makePolygon(obj.Points)

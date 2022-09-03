@@ -36,7 +36,6 @@ else:
     def translate(ctxt, txt):
         return txt
 
-
     def QT_TRANSLATE_NOOP(ctxt, txt):
         return txt
     # \endcond
@@ -72,8 +71,8 @@ class _Terrain(ArchComponent.Component):
         # obj.IfcType = "Fence"
         # obj.MoveWithHost = False
 
-        site = PVPlantSite.get()
-        site.Terrain = obj
+        self.site = PVPlantSite.get()
+        self.site.Terrain = obj
         obj.ViewObject.ShapeColor = (.0000, 0.6667, 0.4980)
         obj.ViewObject.LineColor = (0.0000, 0.6000, 0.4392)
 
@@ -178,6 +177,7 @@ class _Terrain(ArchComponent.Component):
                             "Use a Point Group to generate the surface")
 
         '''
+        #obj.setEditorMode("Volume", 1)
         if not "AllowedAreas" in pl:
             obj.addProperty("App::PropertyLinkList",
                             "AllowedAreas",
@@ -199,6 +199,17 @@ class _Terrain(ArchComponent.Component):
 
     def onChanged(self, obj, prop):
         '''Do something when a property has changed'''
+
+        '''
+        Parámetro	            Descripción	                        Requisitos
+        NCOLS:                  Cantidad de columnas de celdas      Entero mayor que 0.
+        NROWS:                  Cantidad de filas de celdas         Entero mayor que 0.
+        XLLCENTER o XLLCORNER:  Coordenada X del origen (por el centro o la esquina inferior izquierda de la celda) Hacer coincidir con el tipo de coordenada y.
+        YLLCENTER o YLLCORNER:  Coordenada Y del origen (por el centro o la esquina inferior izquierda de la celda) Hacer coincidir con el tipo de coordenada x.
+        CELLSIZE:               Tamaño de celda                     Mayor que 0.
+        NODATA_VALUE:           Los valores de entrada que serán NoData en el ráster de salida  Opcional. El valor predeterminado es -9999
+        '''
+
         if prop == "DEM" or prop == "CuttingBoundary":
             if obj.DEM and obj.CuttingBoundary:
                 grid_space = 1
@@ -209,12 +220,14 @@ class _Terrain(ArchComponent.Component):
 
                 # Read meta data:
                 meta = templist[0:6]
-                nx = int(meta[0][1])  # NCOLS
-                ny = int(meta[1][1])  # NROWS
-                xllcorner = round(float(meta[2][1]), 3)  # XLLCENTER
-                yllcorner = round(float(meta[3][1]), 3)  # YLLCENTER
-                cellsize = round(float(meta[4][1]), 3)  # CELLSIZE
-                nodata_value = float(meta[5][1])  # NODATA_VALUE
+                nx = int(meta[0][1])                     # NCOLS
+                ny = int(meta[1][1])                     # NROWS
+                xllref = meta[2][0]                      # XLLCENTER / XLLCORNER
+                xllvalue = round(float(meta[2][1]), 3)
+                yllref = meta[3][0]                      # YLLCENTER / XLLCORNER
+                yllvalue = round(float(meta[3][1]), 3)
+                cellsize = round(float(meta[4][1]), 3)   # CELLSIZE
+                nodata_value = float(meta[5][1])         # NODATA_VALUE
 
                 # set coarse_factor
                 coarse_factor = max(round(grid_space / cellsize), 1)
@@ -223,96 +236,126 @@ class _Terrain(ArchComponent.Component):
                 templist = templist[6:(6 + ny)]
                 templist = [templist[i][0::coarse_factor] for i in np.arange(0, len(templist), coarse_factor)]
                 datavals = np.array(templist).astype(float)
-                templist.clear()
+                del templist
 
                 # create xy coordinates
-                x = cellsize * np.arange(nx)[0::coarse_factor] + xllcorner
-                y = cellsize * np.arange(ny)[-1::-1][0::coarse_factor] + yllcorner
+                import PVPlantSite
+                offset = PVPlantSite.get().Origin
+                x = 1000 * (cellsize * np.arange(nx)[0::coarse_factor] + xllvalue) - offset.x
+                y = 1000 * (cellsize * np.arange(ny)[-1::-1][0::coarse_factor] + yllvalue) - offset.y
+                datavals = 1000 * datavals # - offset.z
 
                 # remove points out of area
                 # 1. coarse:
                 inc_x = obj.CuttingBoundary.Shape.BoundBox.XLength * 0.0
                 inc_y = obj.CuttingBoundary.Shape.BoundBox.YLength * 0.0
+                tmp = np.where(np.logical_and(x >= (obj.CuttingBoundary.Shape.BoundBox.XMin - inc_x),
+                                              x <= (obj.CuttingBoundary.Shape.BoundBox.XMax + inc_x)))[0]
+                x_max = np.ndarray.max(tmp)
+                x_min = np.ndarray.min(tmp)
 
-                tmp = np.where(np.logical_and(x >= (obj.CuttingBoundary.Shape.BoundBox.XMin - inc_x) / 1000,
-                                              x <= (obj.CuttingBoundary.Shape.BoundBox.XMax + inc_x) / 1000))[0]
-                max_x = np.ndarray.max(tmp)
-                min_x = np.ndarray.min(tmp)
+                tmp = np.where(np.logical_and(y >= (obj.CuttingBoundary.Shape.BoundBox.YMin - inc_y),
+                                              y <= (obj.CuttingBoundary.Shape.BoundBox.YMax + inc_y)))[0]
+                y_max = np.ndarray.max(tmp)
+                y_min = np.ndarray.min(tmp)
+                del tmp
 
-                tmp = np.where(np.logical_and(y >= (obj.CuttingBoundary.Shape.BoundBox.YMin - inc_y) / 1000,
-                                              y <= (obj.CuttingBoundary.Shape.BoundBox.YMax + inc_y) / 1000))[0]
-                max_y = np.ndarray.max(tmp)
-                min_y = np.ndarray.min(tmp)
+                x = x[x_min:x_max+1]
+                y = y[y_min:y_max+1]
+                datavals = datavals[y_min:y_max+1, x_min:x_max+1]
 
-
-                '''
-                min_x = 0
-                max_x = 0
-                comp = (obj.CuttingBoundary.Shape.BoundBox.XMin - inc_x) / 1000
-                for i in range(nx):
-                    if x[i] > comp:
-                        min_x = i - 1
-                        break
-                comp = (obj.CuttingBoundary.Shape.BoundBox.XMax + inc_x) / 1000
-                for i in range(min_x, nx):
-                    if x[i] > comp:
-                        max_x = i
-                        break
-
-                min_y = 0
-                max_y = 0
-                comp = (obj.CuttingBoundary.Shape.BoundBox.YMax + inc_y) / 1000
-                for i in range(ny):
-                    if y[i] < comp:
-                        max_y = i
-                        break
-                comp = (obj.CuttingBoundary.Shape.BoundBox.YMin - inc_y) / 1000
-                for i in range(max_y, ny):
-                    if y[i] < comp:
-                        min_y = i
-                        break
-                '''
-
-                x = x[min_x:max_x]
-                y = y[max_y:min_y]
-                datavals = datavals[max_y:min_y, min_x:max_x]
-
-                # Create surface:
-                if False:  # faster but more memory 46s - 4,25 gb
-                    x, y = np.meshgrid(x, y)
+                # Create mesh - surface:
+                if True:  # faster but more memory 46s - 4,25 gb
+                    '''
+                    x, y = np.meshgrid(x,2w)
                     xx = x.flatten()
                     yy = y.flatten()
                     zz = datavals.flatten()
                     x[:] = 0
                     y[:] = 0
                     datavals[:] = 0
+
                     pts = []
                     for i in range(0, len(xx)):
                         if datavals[j][i] != nodata_value:
-                            pts.append(FreeCAD.Vector(xx[i], yy[i], zz[i]) * 1000)
+                            pts.append([xx[i] * 1000, yy[i] * 1000, zz[i] * 1000])
+                    print(pts)
 
                     xx[:] = 0
                     yy[:] = 0
                     zz[:] = 0
-
+                    '''
                     import PVPlantCreateTerrainMesh
-                    PVPlantCreateTerrainMesh.Triangulate()
+                    v=1
+                    if v == 0:
+                        pts = []
+                        for i in range(0, len(x)):
+                            for j in range(len(y)):
+                                if datavals[j][i] != nodata_value:
+                                    if obj.CuttingBoundary.Shape.isInside(FreeCAD.Vector(x[i], y[j], 0), 0, True):
+                                        pts.append([x[i], y[j], datavals[j][i]])
+
+                        mesh = PVPlantCreateTerrainMesh.Triangulate(np.array(pts))
+                        del pts
+                        import Mesh
+                        Mesh.show(mesh)
+
+                        sh = Part.Shape()
+                        sh.makeShapeFromMesh(mesh.Topology, 0.1)
+                        obj.Shape = sh
+
+                    elif v == 1:
+                        rows = [[],]
+                        cnt = 0
+                        steps = 10
+                        for j in range(len(y)):
+                            pts=[]
+                            for i in range(len(x)):
+                                if datavals[j][i] != nodata_value:
+                                    if obj.CuttingBoundary.Shape.isInside(FreeCAD.Vector(x[i], y[j], 0), 0, True):
+                                        pts.append([x[i], y[j], datavals[j][i]])
+                            rows[-1].extend(pts)
+                            cnt += 1
+                            if cnt == steps:
+                                rows.append(pts)
+                                cnt = 0
+                        if len(rows[-1]) in [0,1]:
+                            rows.pop()
+
+                        def makeTriangulation(points):
+                            return PVPlantCreateTerrainMesh.Triangulate(np.array(points))
+
+                        from multiprocessing import cpu_count
+                        from multiprocessing.pool import ThreadPool
+                        results = ThreadPool(cpu_count() - 1).imap_unordered(makeTriangulation, rows)
+
+                        import Mesh
+                        tmp = []
+                        for result in results:
+                            Mesh.show(result)
+                            tmp.append(result)
+
+                        #sh = Part.Shape()
+                        #sh.makeShapeFromMesh(mesh.Topology, 0.1)
+                        #obj.Shape = sh
 
                 else:  # 51s - 3,2 gb
-                    lines = []
+                    lines = list()
                     for j in range(len(y)):
-                        edges = []
-                        for i in range(0, len(x) - 1):
-                            if datavals[j][i] != nodata_value:
-                                ed = Part.makeLine(FreeCAD.Vector(x[i], y[j], datavals[j][i]) * 1000,
-                                                   FreeCAD.Vector(x[i + 1], y[j], datavals[j][i + 1]) * 1000)
-                                edges.append(ed)
-                        line = Part.Wire(edges)
-                        lines.append(line)
-                    p = Part.makeLoft(lines, False, True, False)
-                    p = Part.Solid(p)
-                    obj.Shape = p
-                pts.clear()
+                        pts = []
+                        for i in range(len(x)):
+                            if (obj.CuttingBoundary.Shape.isInside(FreeCAD.Vector(x[i], y[j], 0), 0.0, True)) \
+                                    and (datavals[j][i] != nodata_value):
+                                pts.append(FreeCAD.Vector(x[i], y[j], datavals[j][i]) * 1000)
+                        if len(pts) > 0:
+                            bsp = Part.BSplineCurve()
+                            bsp.approximate(pts)
+                            lines.append(bsp)
+                            #lines.append(Part.makePolygon(pts))
+                    sh = Part.makeLoft(lines, False, True, False)
+                    obj.Shape = sh
+
+                del x, y, datavals
 
         if prop == "PointsGroup" or prop == "CuttingBoundary":
             if obj.PointsGroup and obj.CuttingBoundary:
@@ -323,7 +366,7 @@ class _Terrain(ArchComponent.Component):
                     bnd = Part.makePolygon(pts)
 
                 # TODO: not use the first point, else the Origin in "Site".
-                #  It is standar for everything.
+                #  It is standard for everything.
                 firstPoint = self.obj.PointsGroup.Points.Points[0]
                 nbase = FreeCAD.Vector(firstPoint.x, firstPoint.y, firstPoint.z)
                 data = []
@@ -472,8 +515,8 @@ class _CommandTerrain:
     #    return not FreeCAD.ActiveDocument is None
 
     def IsActive(self):
-        if FreeCAD.ActiveDocument.getObject("Site") is None:
-            return False
+        #if FreeCAD.ActiveDocument.getObject("Site") is None:
+        #    return False
         return True
 
     def Activated(self):

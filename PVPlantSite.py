@@ -54,10 +54,8 @@ zone_list = ["Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7", "Z8", "Z9", "Z10", "Z11",
              "Z49", "Z50", "Z51", "Z52", "Z53", "Z54", "Z55", "Z56", "Z57", "Z58", "Z59", "Z60"]
 
 
-def get(origin=FreeCAD.Vector(0, 0, 0)):
-    """
-    Find the existing Site object
-    """
+def get(origin=FreeCAD.Vector(0, 0, 0), create = False):
+    """ Find the existing Site object """
     # Return an existing instance of the same name, if found.
     obj = FreeCAD.ActiveDocument.getObject('Site')
 
@@ -66,7 +64,8 @@ def get(origin=FreeCAD.Vector(0, 0, 0)):
             obj.Origin = origin
         return obj
 
-    obj = makePVPlantSite()
+    if create:
+        obj = makePVPlantSite()
     return obj
 
 
@@ -763,10 +762,13 @@ class _PVPlantSite(ArchSite._Site):
 
     def setLatLon(self, lat, lon):
         import utm
+        import PVPlantImportGrid
         x, y, zone_number, zone_letter = utm.from_latlon(lat, lon)
         self.obj.UtmZone = zone_list[zone_number - 1]
         # self.obj.UtmZone = "Z"+str(zone_number)
-        self.obj.Origin = FreeCAD.Vector(x, y, 0.0) * 1000
+        #z = PVPlantImportGrid.get_elevation(lat, lon)
+        zz = PVPlantImportGrid.getSinglePointElevationFromBing(lat, lon)
+        self.obj.Origin = FreeCAD.Vector(x * 1000, y * 1000, zz.z)
 
 
 class _ViewProviderSite(ArchSite._ViewProviderSite):

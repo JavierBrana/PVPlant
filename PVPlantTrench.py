@@ -1,6 +1,6 @@
 # /**********************************************************************
 # *                                                                     *
-# * Copyright (c) 2021 Javier Braña <javier.branagutierrez@gmail.com>  *
+# * Copyright (c) 2021 Javier Braña <javier.branagutierrez@gmail.com>   *
 # *                                                                     *
 # * This program is free software; you can redistribute it and/or modify*
 # * it under the terms of the GNU Lesser General Public License (LGPL)  *
@@ -333,13 +333,16 @@ class _TrenchTaskPanel:
         self.form.buttonDown.clicked.connect(self.moveDown)
 
         self.path = None
-        self.ui = None
+        #self.ui = None
         self.node = []
         self.pos = None
         self.support = None
         self.info = None
         self.view = FreeCADGui.ActiveDocument.ActiveView
-        #self.call = self.view.addEventCallback("SoEvent", self.action)
+        self.call = self.view.addEventCallback("SoEvent", self.action)
+
+    def featureName(self):
+        return "Trench"
 
     def action(self, arg):
         """Handle the 3D scene events.
@@ -865,7 +868,7 @@ class _CommandTrench_V0(gui_base_original.Creator):
         self.ui.setNextFocus()
 
 
-class _CommandTrench: # V1:
+class _CommandTrench:  # V1:
     """Gui command for the Line tool."""
 
     def GetResources(self):
@@ -897,9 +900,9 @@ class _CommandTrench: # V1:
                 done = True
 
         if not done:
-            TaskPanel = _TrenchTaskPanel()
-            if TaskPanel:
-                FreeCADGui.Control.showDialog(TaskPanel)
+            taskd = _TrenchTaskPanel()
+            if taskd:
+                FreeCADGui.Control.showDialog(taskd)
             else:
                 print(" No ha sido posible crear el formulario")
 

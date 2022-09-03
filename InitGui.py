@@ -44,7 +44,7 @@ class PVPlantWorkbench (Workbench):
             PVPlantStringBox, PVPlantCable, PVPlantStringing, \
             PVPlantPad, PVPlantRoad, PVPlantTerrain, PVPlantArea, PVPlantManhole, \
             exportPVSyst, PVPlantBOQMechanical, PVPlantBOQElectrical, PVPlantBOQCivil,\
-            GraphProfile, \
+            GraphProfile, Utils.PVPlantTrace,\
             reload
 
         # A list of command names created in the line above
@@ -64,6 +64,7 @@ class PVPlantWorkbench (Workbench):
                      "PVPlantManhole",
                      #"PVPlantFoundation"
                      "GraphTerrainProfile",
+                     "Trace",
                      ]
         self.list1 = [
                      "RackType",

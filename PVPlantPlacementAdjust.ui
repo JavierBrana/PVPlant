@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <author>Javier Braña</author>
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>386</width>
+    <height>443</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Park Settings</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Configuración</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_2">
+      <item row="3" column="0">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>Dirección Horizontal</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="label_11">
+        <property name="text">
+         <string>Dirección Vertical</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_4">
+        <property name="text">
+         <string>Posicionar</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1" colspan="2">
+       <widget class="QComboBox" name="comboDirH">
+        <item>
+         <property name="text">
+          <string>De izquierda a derecha</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>De derecha a izquiera</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>De centro a los lados</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="6" column="0">
+       <widget class="QLabel" name="label_9">
+        <property name="text">
+         <string>Offset Vertical</string>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="1" colspan="2">
+       <widget class="QLineEdit" name="editOffsetVertical"/>
+      </item>
+      <item row="5" column="1" colspan="2">
+       <widget class="QLineEdit" name="editOffsetHorizontal"/>
+      </item>
+      <item row="5" column="0">
+       <widget class="QLabel" name="label_7">
+        <property name="text">
+         <string>Offset Horizontal</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1" colspan="2">
+       <widget class="QComboBox" name="comboDirV">
+        <item>
+         <property name="text">
+          <string>De arriba a abajo</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>De abajo a arriba</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Del centro a los lados</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="0" column="1" colspan="2">
+       <widget class="QComboBox" name="comboOrientation">
+        <item>
+         <property name="text">
+          <string>Individual</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Linea longitudinal</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_2">
+     <property name="title">
+      <string>GroupBox</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_2">
+      <item>
+       <widget class="QCheckBox" name="checkBox_2">
+        <property name="text">
+         <string>Evitar escalonado entre estructuras contiguas</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="checkBox">
+        <property name="text">
+         <string>Ajustal a la media de la curva</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>comboOrientation</tabstop>
+  <tabstop>comboDirH</tabstop>
+  <tabstop>comboDirV</tabstop>
+  <tabstop>editOffsetHorizontal</tabstop>
+  <tabstop>editOffsetVertical</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>

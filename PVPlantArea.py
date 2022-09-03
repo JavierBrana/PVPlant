@@ -163,7 +163,7 @@ class _ViewProviderArea:
 ''' Forbidden Area: '''
 
 
-class _ForbiddenArea:
+class _ProhibitedArea:
     def __init__(self, obj):
         self.setCommonProperties(obj)
 
@@ -483,7 +483,7 @@ class _CommandBoundary:
     def GetResources(self):
         return {'Pixmap': str(os.path.join(PVPlantResources.DirIcons, "area.svg")),
                 'Accel': "A, B",
-                'MenuText': "Allowed Area",
+                'MenuText': "Area",
                 'ToolTip': "Allowed Area"}
 
     def Activated(self):
@@ -499,15 +499,23 @@ class _CommandBoundary:
             return False
 
 
-class _CommandForbiddenArea:
+class _CommandProhibitedArea:
 
     def GetResources(self):
         return {'Pixmap': str(os.path.join(PVPlantResources.DirIcons, "area_forbidden.svg")),
                 'Accel': "A, B",
-                'MenuText': QT_TRANSLATE_NOOP("Placement", "Placement"),
-                'ToolTip': QT_TRANSLATE_NOOP("Placement", "Crear un campo fotovoltaico")}
+                'MenuText': "Prohibited Area",
+                'ToolTip': "Prohibited Area"}
 
     def Activated(self):
+        sel = FreeCADGui.Selection.getSelection()
+        wire = None
+        '''
+        if sel:
+            for obj in sel:
+                if
+        '''
+
         taskd = _PVPlantPlacementTaskPanel()
         FreeCADGui.Control.showDialog(taskd)
 
@@ -523,8 +531,8 @@ class _CommandPVArea:
     def GetResources(self):
         return {'Pixmap': str(os.path.join(PVPlantResources.DirIcons, "way.svg")),
                 'Accel': "A, P",
-                'MenuText': QT_TRANSLATE_NOOP("Placement", "Placement"),
-                'ToolTip': QT_TRANSLATE_NOOP("Placement", "Crear un campo fotovoltaico")}
+                'MenuText': "PVArea",
+                'ToolTip': "PVArea"}
 
     def Activated(self):
         sel = FreeCADGui.Selection.getSelection()[0]
@@ -555,6 +563,6 @@ if FreeCAD.GuiUp:
             return not FreeCAD.ActiveDocument is None
 
     FreeCADGui.addCommand('Area', _CommandBoundary())
-    FreeCADGui.addCommand('ForbiddenArea', _CommandForbiddenArea())
+    FreeCADGui.addCommand('ForbiddenArea', _CommandProhibitedArea())
     FreeCADGui.addCommand('PVArea', _CommandPVArea())
     FreeCADGui.addCommand('PVPlantAreas', CommandRackGroup())

@@ -23,6 +23,7 @@
 import FreeCAD
 import ArchComponent
 import Draft
+import Part
 import math
 import PVPlantFencePost
 import PVPlantSite
@@ -55,6 +56,11 @@ from PVPlantResources import DirIcons as DirIcons
 
 EAST = FreeCAD.Vector(1, 0, 0)
 
+def makeprojection(pathwire):
+    site = FreeCAD.ActiveDocument.Site
+    land = site.Terrain.Shape
+    proj = land.makeParallelProjection(pathwire, FreeCAD.Vector(0, 0, 1))
+    return proj
 
 def makePVPlantFence(section, post, path):
     obj = FreeCAD.ActiveDocument.addObject('Part::FeaturePython', 'Fence')
@@ -156,15 +162,13 @@ def calculatePlacement(globalRotation, edge, offset, RefPt, xlate, align, normal
         psi = 0.0
         theta = 0.0
         phi = 0.0
-        FreeCAD.Console.PrintWarning(
-            "Draft PathArray.orientShape - Path normal is Null. Cannot align.\n")
+        FreeCAD.Console.PrintWarning("Draft PathArray.orientShape - Path normal is Null. Cannot align.\n")
     elif abs(b.dot(z)) == 1.0:  # 2) binormal is || z
         # align shape to tangent only
         psi = math.degrees(DraftVecUtils.angle(x, t, z))
         theta = 0.0
         phi = 0.0
-        FreeCAD.Console.PrintWarning(
-            "Draft PathArray.orientShape - Gimbal lock. Infinite lnodes. Change Path or Base.\n")
+        FreeCAD.Console.PrintWarning("Draft PathArray.orientShape - Gimbal lock. Infinite lnodes. Change Path or Base.\n")
     else:  # regular case
         psi = math.degrees(DraftVecUtils.angle(x, lnodes, z))
         theta = math.degrees(DraftVecUtils.angle(z, b, lnodes))
@@ -217,13 +221,11 @@ def calculatePlacementsOnPath(shapeRotation, pathwire, count, xlate, align):
             if closedpath:
                 nexte = 0
     # -----------------------------------------------------------------------------------------------------------------
-
     for e in path:  # find cumulative edge end distance
         cdist += e.Length
         ends.append(cdist)
 
     placements = []
-
     # place the start shape
     pt = path[0].Vertexes[0].Point
     placements.append(calculatePlacement(shapeRotation, path[0], 0, pt, xlate, align, normal))
@@ -264,7 +266,6 @@ def calculatePlacementsOnPath(shapeRotation, pathwire, count, xlate, align):
             shapeRotation, path[iend], offset, pt, xlate, align, normal))
 
         travel += step
-
     return placements
 
 
@@ -375,17 +376,12 @@ class _Fence(ArchComponent.Component):
         return None
 
     def execute(self, obj):
-        import Part
 
         pathwire = self.calculatePathWire(obj)
-        if not pathwire:
+        if pathwire is None:
             # FreeCAD.Console.PrintLog("ArchFence.execute: path " + obj.Base.Name + " has no edges\n")
             return
-        '''
-        if not obj.Section:
-            FreeCAD.Console.PrintLog("ArchFence.execute: Section not set\n")
-            return
-        '''
+
         if not obj.Post:
             FreeCAD.Console.PrintLog("ArchFence.execute: Post not set\n")
             return
@@ -393,19 +389,60 @@ class _Fence(ArchComponent.Component):
         self.Posts = []
         self.Foundations = []
         site = PVPlantSite.get()
-        land = site.Terrain.Shape
+        if True:  # prueba
+            import MeshPart as mp
+            land = FreeCAD.ActiveDocument.Mesh002.Mesh
+            pathwire = mp.projectShapeOnMesh(pathwire, land, FreeCAD.Vector(0, 0, 1))
+            print(len(pathwire))
+            #pathwire =
+        else:
+            if PVPlantSite.get().Terrain.TypeId == 'Mesh::Feature':
+                import MeshPart as mp
+                land = PVPlantSite.get().Terrain.Mesh
+                pathwire = mp.projectShapeOnMesh(pathwire, land, FreeCAD.Vector(0, 0, 1))
 
-        '''
-        land_coppy = land.copy()
-        land_coppy.Placement.Base -= site.Origin
-        pathwire = pathwire.copy()
-        pathwire.Placement.Base -= site.Origin
-        proj = land_coppy.makeParallelProjection(pathwire, FreeCAD.Vector(0, 0, 1))
-        '''
-        proj = land.makeParallelProjection(pathwire, FreeCAD.Vector(0, 0, 1))
-        pathwire = Part.Wire(proj.Edges)
+            else:
+                land = site.Terrain.Shape
+                pathwire = land.makeParallelProjection(pathwire, FreeCAD.Vector(0, 0, 1))
 
-        pathLength = pathwire.Length
+        if pathwire is None:
+            return
+
+        ''' no sirve:
+        if len(pathwire.Wires) > 1:
+            import draftgeoutils
+            pathwire = draftgeoutils.wires.superWire(pathwire.Edges, True)
+            Part.show(pathwire)
+        '''
+
+        ''' unir todas en una '''
+        '''
+        if len(pathwire.Wires) > 1:
+            import Utils.PVPlantUtils as utils
+            wires = pathwire.Wires
+            new_wire = []
+            to_compare = utils.getPoints(wires.pop(0))
+            new_wire.extend(to_compare)
+            while len(wires)>0:
+                wire = wires[0]
+                points = utils.getPoints(wire)
+                to_remove = None
+                if points[0] in to_compare:
+                    to_remove = points[0]
+                if points[-1] in to_compare:
+                    to_remove = points[-1]
+                if to_remove:
+                    to_compare = points.copy()
+                    points.remove(to_remove)
+                    new_wire.extend(points)
+                    wires.pop()
+                    continue
+                wires.append(wires.pop())
+            pathwire = Part.makePolygon(new_wire)
+            #Part.show(pathwire)
+        #return
+        '''
+
         sectionLength = obj.Gap.Value
         postLength = obj.Post.Shape.BoundBox.XMax
         postPlacements = []
@@ -414,8 +451,8 @@ class _Fence(ArchComponent.Component):
         count = 0
         drawFirstPost = True
         pathLength = 0
-        for seg in pathsegments:
-            segwire = Part.Wire(seg)
+        for segment in pathsegments:
+            segwire = Part.Wire(Part.__sortEdges__(segment))
             segLength = segwire.Length
             pathLength += segLength
 
@@ -433,8 +470,6 @@ class _Fence(ArchComponent.Component):
                 placements.pop(0)
 
             postPlacements.extend(placements)
-
-
 
         postShapes, postFoundation = self.calculatePosts(obj, postPlacements)
         sections, num = self.calculateSections(obj, postPlacements)
@@ -461,13 +496,11 @@ class _Fence(ArchComponent.Component):
             ed2 = pathwire.Edges[ind + 1]
             vec1 = ed1.Vertexes[1].Point - ed1.Vertexes[0].Point
             vec2 = ed2.Vertexes[1].Point - ed2.Vertexes[0].Point
-
             angle = math.degrees(vec1.getAngle(vec2))
             if angle > obj.Angle.Value:
                 segment = []
                 segments.append(segment)
             segment.append(ed2)
-
         return segments
 
     def calculateNumberOfSections(self, pathLength, sectionLength, postLength):
@@ -478,28 +511,14 @@ class _Fence(ArchComponent.Component):
     def calculatePostPlacements(self, obj, pathwire, rotation):
         postWidth = obj.Post.Diameter.Value
         transformationVector = FreeCAD.Vector(0, postWidth, 0)
-        #transformationVector = FreeCAD.Vector(0, 0, 0)
-        if False:
-            placements = []
-            for e in pathwire.Edges:
-                num = math.ceil(e.Length / obj.Section.Shape.BoundBox.XMax)
-                pl = calculatePlacementsOnPath(rotation, e, num, transformationVector, True)
-                pl.append(pl.pop(1))
-                print(pl)
-                placements.extend(pl)
-                print(placements)
-                print("-----------------------------------------------------\n")
-        else:
-            placements = calculatePlacementsOnPath(rotation, pathwire, int(obj.NumberOfSections) + 1, transformationVector, True)
-            # The placement of the last object is always the second entry in the list.
-            # So we move it to the end
+        placements = calculatePlacementsOnPath(rotation, pathwire, int(obj.NumberOfSections) + 1, transformationVector, True)
+        # The placement of the last object is always the second entry in the list.
+        # So we move it to the end:
+        if len(placements) > 1:
             placements.append(placements.pop(1))
-
         return placements
 
     def calculatePosts(self, obj, postPlacements):
-        import Draft, Part
-
         posts = []
         foundations = []
         for placement in postPlacements:
@@ -518,8 +537,6 @@ class _Fence(ArchComponent.Component):
         return posts, foundations
 
     def calculateSections(self, obj, postPlacements):
-        import Part
-
         shapes = []
         faceNumbers = []
 
@@ -563,7 +580,8 @@ class _ViewProviderFence(ArchComponent.ViewProviderComponent):
 
     def __init__(self, vobj):
         ArchComponent.ViewProviderComponent.__init__(self, vobj)
-        self.Object = vobj
+        vobj.Proxy = self
+        #vobj.addExtension("Gui::ViewProviderGroupExtensionPython")
 
     def getIcon(self):
         return str(os.path.join(DirIcons, "fence.svg"))
@@ -572,6 +590,9 @@ class _ViewProviderFence(ArchComponent.ViewProviderComponent):
         '''
         Create Object visuals in 3D view.
         '''
+
+        self.Object = vobj.Object
+
         # GeoCoords Node.
         self.geo_coords = coin.SoGeoCoordinate()
 
@@ -614,7 +635,7 @@ class _ViewProviderFence(ArchComponent.ViewProviderComponent):
         origin = PVPlantSite.get()
         base = copy.deepcopy(origin.Origin)
         base.z = 0
-        print("  - Propiedad: ", prop)
+        #print("  - Propiedad: ", prop)
         if prop == "Shape":
             shape = obj.getPropertyByName(prop)
             # Get GeoOrigin.

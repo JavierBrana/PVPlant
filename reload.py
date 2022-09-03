@@ -1,8 +1,6 @@
 import FreeCAD
 if FreeCAD.GuiUp:
     import FreeCADGui, os
-    from PySide import QtCore, QtGui
-    from DraftTools import translate
     from PySide.QtCore import QT_TRANSLATE_NOOP
 else:
     # \cond
@@ -30,8 +28,9 @@ class _CommandReload:
             PVPlantFoundation, PVPlantTreeGenerator, PVPlantBuilding, exportPVSyst, \
             PVPlantTrench, PVPlantEarthWorks, PVPlantStringBox, PVPlantCable, PVPlantPad, \
             PVPlantRoad, PVPlantTerrain, PVPlantStringing, PVPlantManhole, \
-            PVPlantBOQMechanical, PVPlantBOQElectrical, PVPlantArea, PVPlantUtils, \
-            GraphProfile
+            PVPlantBOQMechanical, PVPlantBOQElectrical, PVPlantArea, GraphProfile
+        from Utils import PVPlantUtils
+        from Utils import PVPlantTrace, gui_edit, profile_editor, graphics
         #from  Lib import GoogleMapDownloader
 
         import importlib
@@ -62,6 +61,11 @@ class _CommandReload:
         importlib.reload(PVPlantUtils)
         importlib.reload(PVPlantManhole)
         importlib.reload(GraphProfile)
+
+        importlib.reload(PVPlantTrace)
+        importlib.reload(gui_edit)
+        importlib.reload(profile_editor)
+        importlib.reload(graphics)
 
         #importlib.reload(GoogleMapDownloader)
         print("Reload modules...")

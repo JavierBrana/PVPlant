@@ -38,6 +38,27 @@ from PVPlantResources import DirIcons as DirIcons
 import PVPlantSite
 
 
+def get_elevation(lat=None, long=None):
+    '''
+        script for returning elevation in m from lat, long
+    '''
+    from requests import get
+    from pandas import json_normalize
+
+    if lat is None or long is None: return None
+
+    query = ('https://api.open-elevation.com/api/v1/lookup'
+             f'?locations={lat},{long}')
+
+    # Request with a timeout for slow responses
+    r = get(query, timeout=20)
+
+    # Only get the json response in case of 200 or 201
+    if r.status_code == 200 or r.status_code == 201:
+        elevation = json_normalize(r.json(), 'results')['elevation'].values[0]
+    else:
+        elevation = None
+    return elevation
 
 def getSinglePointElevationFromBing(lat, lng):
     #http://dev.virtualearth.net/REST/v1/Elevation/List?points={lat1,long1,lat2,long2,latN,longnN}&heights={heights}&key={BingMapsAPIKey}
@@ -409,7 +430,8 @@ class _ImportPointsTaskPanel:
         self.form2.buttonBoundary.clicked.connect(self.addBoundary)
 
 
-        self.form = [self.form1, self.form2]
+        #self.form = [self.form1, self.form2]
+        self.form = self.form1
 
     ''' future:
     def retranslateUi(self, dialog):
@@ -464,6 +486,8 @@ class _ImportPointsTaskPanel:
     def accept(self):
         from datetime import datetime
         starttime = datetime.now()
+
+        site = PVPlantSite.get()
 
         try:
             PointGroups = FreeCAD.ActiveDocument.Point_Groups
@@ -520,10 +544,10 @@ class _ImportPointsTaskPanel:
                     templist.clear()
 
                     # create xy coordinates
-                    x = cellsize * np.arange(nx)[0::coarse_factor] + xllcorner
-                    y = cellsize * np.arange(ny)[-1::-1][0::coarse_factor] + yllcorner
+                    offset = site.Origin / 1000
+                    x = cellsize * np.arange(nx)[0::coarse_factor] + xllcorner - offset.x
+                    y = cellsize * np.arange(ny)[-1::-1][0::coarse_factor] + yllcorner - offset.y
 
-                    site = PVPlantSite.get()
                     if self.Boundary:
                         inc_x = self.Boundary.Shape.BoundBox.XLength * 0.05
                         inc_y = self.Boundary.Shape.BoundBox.YLength * 0.05
@@ -627,21 +651,33 @@ class _ImportPointsTaskPanel:
                     x=[]
                     y=[]
                     z=[]
+                    # todo: dar la opción de qué delimitador usar
                     delim = ';' if extension.lower() == "csv" else ' '
                     with open(self.filename, newline='') as csvfile:
-                        spamreader = csv.reader(csvfile, delimiter = delim)
+                        spamreader = csv.reader(csvfile, delimiter = delim,
+                                                skipinitialspace=True)
                         for row in spamreader:
                             x.append(float(row[1]))
                             y.append(float(row[2]))
                             z.append(float(row[3]))
+
+                    #prueba:
+                    pts = []
+                    for i, point in enumerate(x):
+                        pts.append(FreeCAD.Vector(x[i] * 1000, y[i] * 1000, z[i] * 1000))
+
+                    PointObject.addPoints(pts)
+                    PointGroup.Points = PointObject
+                    return
+
 
                     x = np.array(x)
                     y = np.array(y)
                     z = np.array(z)
                     spline = sp.interpolate.Rbf(x, y, z, function='thin-plate')
 
-                    xi = np.linspace(min(x), max(x))
-                    yi = np.linspace(min(y), max(y))
+                    xi = np.linspace(min(x), max(x), int((min(x) + max(x)) / 10000))
+                    yi = np.linspace(min(y), max(y), int((min(y) + max(y)) / 10000))
                     X, Y = np.meshgrid(xi, yi)
                     Z = spline(X, Y)
 

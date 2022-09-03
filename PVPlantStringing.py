@@ -414,6 +414,11 @@ class _String(ArchComponent.Component):
         if state:
             self.Type = state
 
+    def onBeforeChange(self, obj, prop):
+        ''''''
+        print(prop)
+        print(obj.getPropertyByName(prop))
+
     def onChanged(self, obj, prop):
         '''Do something when a property has changed'''
 

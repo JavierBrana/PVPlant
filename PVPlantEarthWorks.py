@@ -30,6 +30,13 @@ import PVPlantResources
 def VertexesToPoints(Vertexes):
     return [ver.Point for ver in Vertexes]
 
+def pointsfromlines(paths):
+    points = []
+    for path in paths:
+        for point in path:
+            points.append(point)
+    return points
+
 def makeOffset(trackerPath, offset):
     pts = []
     for ver in trackerPath.Shape.Vertexes:
@@ -47,7 +54,7 @@ function getCuts:
 
 - Inputs:
     1. crossPoints:
-    2. PointList:
+    2. PointList: 
     
 - Outputs:
     1. cutSection:
@@ -112,7 +119,7 @@ def getCuts(crossPoints, PointList):
 
 '''
 ------------------------------------------------------------------------------------------------------------------------
-function calculateEarthWorks:
+function calculateEarthWorks2D:
 
 - Description: 
 
@@ -127,7 +134,7 @@ function calculateEarthWorks:
 '''
 
 
-def calculateEarthWorks(trackerPath, Terrain, offsetup=200, offsetdown=200):
+def calculateEarthWorks2D(trackerPath, Terrain, offsetup=200, offsetdown=200):
     Cuts = None
     Fills = None
     newPath = None
@@ -138,10 +145,11 @@ def calculateEarthWorks(trackerPath, Terrain, offsetup=200, offsetdown=200):
     limitTop = makeOffset(trackerPath, offsetup)
     limitBottom = makeOffset(trackerPath, -offsetdown)
 
-    points3D = []
+    # TODO: hacer genérico terrainProfile no points3D
+    points3D = list()
     if Terrain.isDerivedFrom("Part::Feature"):
         tmp_pts = Terrain.Shape.makeParallelProjection(trackerPath.Shape.Wires[0], FreeCAD.Vector(0, 0, 1))
-        points3D = [ver.Point for ver in tmp_pts.Vertexes]
+        points3D = VertexesToPoints(tmp_pts.Vertexes)
     elif Terrain.isDerivedFrom("Mesh::Feature"):
         import MeshPart as mp
         points3D = mp.projectShapeOnMesh(trackerPath.Shape, Terrain.Mesh, FreeCAD.Vector(0, 0, 1))
@@ -153,12 +161,6 @@ def calculateEarthWorks(trackerPath, Terrain, offsetup=200, offsetdown=200):
     sectionTop = terrainProfile.section(limitTop)
     crossTopPoints = VertexesToPoints(sectionTop.Vertexes)
     cutPoints, PointList = getCuts(crossTopPoints, points3D)
-
-    # Prueba:
-    '''
-    lT = Part.Wire([limitTop.Vertexes[0].Point, limitTop.Vertexes[1].Point])
-    tP = Part.Wire(points3D)
-    '''
 
     Cuts = []
     for i in cutPoints:
@@ -257,8 +259,6 @@ def makeMesh(Points, MaxlengthLE=10000):
 
 class _EarthWorksTaskPanel:
     def __init__(self):
-        import os
-
         self.To = None
 
         # self.form:
@@ -269,31 +269,150 @@ class _EarthWorksTaskPanel:
         from datetime import datetime
         starttime = datetime.now()
 
+        from multiprocessing import cpu_count
+        from multiprocessing.pool import ThreadPool
+
         FreeCAD.ActiveDocument.openTransaction("Calculate EarthWorks")
         terrain = FreeCAD.ActiveDocument.Site.Terrain
+        terrain = None
+        type = 0
+        if False:  # prueba
+            terrain = FreeCAD.ActiveDocument.Mesh005.Mesh
+        else:
+            import PVPlantSite
+            if PVPlantSite.get().Terrain.TypeId == 'Mesh::Feature':
+                terrain = PVPlantSite.get().Terrain.Mesh
+            else:
+                terrain = PVPlantSite.get().Terrain.Shape
+                type = 1
+
         sel = FreeCADGui.Selection.getSelection()
         # TODO: check if selection objects are frames and get their placement axis
 
+        '''  2D:
         Cuts = []
         Fills = []
         newPaths = []
-        for obj in sel:
-            cut, fill, newpath = calculateEarthWorks(obj, terrain,
-                                                     self.form.editToleranceCut.value(),
-                                                     self.form.editToleranceFill.value())
-            if not (cut is None):
-                Cuts.extend(cut)
-            '''
-            if not (fill is None):
-                Fills.append(fill.Points)
-                makeMesh(pointsfromlines(Fills))
-            if not (newpath is None):
-                newPaths.append(newpath.Points)
-                makeMesh(pointsfromlines(newPaths), 0)
-            '''
-        #makeMesh(Cuts)
-        FreeCAD.activeDocument().recompute()
+        if not self.form.edit3D.isChecked():
+            for obj in sel:
+                cut, fill, newpath = calculateEarthWorks2D(obj, terrain,
+                                                         self.form.editToleranceCut.value(),
+                                                         self.form.editToleranceFill.value())
+                if not (cut is None):
+                    Cuts.extend(cut)
+                if not (fill is None):
+                    Fills.append(fill.Points)
+                    makeMesh(pointsfromlines(Fills))
+                if not (newpath is None):
+                    newPaths.append(newpath.Points)
+                    makeMesh(pointsfromlines(newPaths), 0)
+            # makeMesh(Cuts)
+        '''
 
+        def makeSolidTerrain(pol):
+            import BOPTools.SplitAPI as splitter
+            ext = pol.extrude(FreeCAD.Vector(0, 0, terrain.BoundBox.ZMax + 1000))
+            sp = splitter.slice(ext, [terrain, ], "Split")
+            return sp.childShapes()[0]
+
+        def calculatetools(column):
+            lines = []
+            faces = []
+            #v1:
+            for group in column:
+                ''''''
+
+            #V0:
+            for group in column:
+                for frame in group:
+                    ptn = frame.Length.Value / 2 + 1000
+                    p1 = FreeCAD.Vector(-ptn, 0, 0)
+                    p2 = FreeCAD.Vector( ptn, 0, 0)
+                    line = Part.LineSegment(p1, p2).toShape()
+                    line.Placement = frame.Placement
+                    lines.append(line)
+
+                    dist = frame.Width.Value + 2 * self.form.editOffset.value()
+                    rec = line.extrude(FreeCAD.Vector(dist, 0, 0))
+                    rec.Placement.Base.x = rec.Placement.Base.x - dist / 2
+                    faces.append(rec)
+            return faces
+
+        def showObjects(obj):
+            Part.show(obj[0], obj[1])
+
+        # 1. step: create a solid terrain:
+        #if terrain.isDerivedFrom("Part::TopoShape"): # if it is a shell
+        results = ThreadPool(cpu_count() - 1).imap_unordered(makeSolidTerrain, FreeCAD.ActiveDocument.Fusion.Shape.childShapes())
+        tmp = []
+        for result in results:
+            #FreeCAD.Console.PrintWarning(result)
+            tmp.append(result)
+        terrain = Part.makeCompound(tmp)
+        #Part.show(terrain, "t3d")
+        print(" -- Generación de terreno:", datetime.now() - starttime)
+        # 2. step: calculate earthworks:
+        sel = sorted(sel, key=lambda k: k.Shape.Vertexes[0].Point.x, reverse=False)
+        height = 10000
+        from PVPlantPlacement import getCols as getCols
+        cols = getCols(sel)
+        # 2.1. Crear las trayectorias:
+        results = ThreadPool(cpu_count() - 1).imap_unordered(calculatetools, cols)
+        tmp.clear()
+        for result in results:
+            for face in result:
+                tmp.append(face)
+        tool = Part.makeCompound(tmp)
+        #Part.show(tool, "tool2D")
+        tool = tool.extrude(FreeCAD.Vector(0, 0, height))
+        s1 = tool.Solids.pop()
+        tool = s1.fuse(tool.Solids)
+        #Part.show(tool, "tool3D")
+        z_initial = tool.Placement.Base.z
+
+        ''' not multiprocessing:
+        stime = datetime.now()
+        tool.Placement.Base.z = z_initial + self.form.editToleranceCut.value()
+        cut = tool.cut(terrain)
+        cut = tool.cut(cut)
+        #Part.show(cut)
+        print(" -- Generación de cuts:", datetime.now() - stime)
+        stime = datetime.now()
+        tool.Placement.Base.z = z_initial - self.form.editToleranceFill.value() - height
+        fill = tool.cut([terrain, ])
+        print(" -- Generación de fills:", datetime.now() - stime)
+        '''
+        def calculateCutFill(ind):
+            if ind==0:
+                tool.Placement.Base.z = z_initial + self.form.editToleranceCut.value()
+                return tool.common([terrain, ])
+            else:
+                tool.Placement.Base.z = z_initial - self.form.editToleranceFill.value() - height
+                return tool.cut([terrain, ])
+        cnt = [0,1]
+        results = ThreadPool(cpu_count() - 1).imap_unordered(calculateCutFill, cnt)
+        tmp.clear()
+        for result in results:
+            tmp.append(result)
+        cut, fill = tmp
+
+        stime = datetime.now()
+        terrain = terrain.cut([cut])
+        print(" -- Generación de cutted terrain:", datetime.now() - stime)
+        stime = datetime.now()
+        terrain = terrain.fuse([fill])
+        print(" -- Generación de filled terrain:", datetime.now() - stime)
+
+        '''
+        Part.show(cut, "cut3d")
+        Part.show(fill, "fill3d")
+        Part.show(terrain, "Modified_Surface")
+        '''
+
+        objects = [[cut, "cut3d"], [fill, "fill3d"]]
+        ThreadPool(cpu_count() - 1).imap_unordered(showObjects, objects)
+
+        #FreeCAD.activeDocument().recompute()
         total_time = datetime.now() - starttime
         print(" -- Tiempo tardado:", total_time)
         self.closeForm()
@@ -306,13 +425,20 @@ class _EarthWorksTaskPanel:
     def closeForm(self):
         FreeCADGui.Control.closeDialog()
 
-def pointsfromlines(paths):
-    points = []
-    for path in paths:
-        for point in path:
-            points.append(point)
-    return points
+def ShapeToMesh(shape):
+    facets = list()
+    for face in shape.Faces:
+        pt = [ver.Point for ver in face.Vertexes]
 
+def MeshToShape(mesh):
+    faces = list()
+    for facet in mesh.Facets:
+        pt = facet.Points.copy()
+        pt.append(pt[0])
+        faces.append(Part.Face(Part.makePolygon(pt)))
+    shape = faces.pop()
+    shape = shape.fuse([faces])
+    return shape
 
 class _CommandCalculateEarthworks:
 

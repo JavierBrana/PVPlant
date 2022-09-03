@@ -212,6 +212,7 @@ class MapWindow(QtGui.QWidget):
 
         import geojson
         import PVPlantImportGrid as ImportElevation
+        import Draft
 
         items = geojson.loads(drawnItems)
         count_points = 0
@@ -232,7 +233,7 @@ class MapWindow(QtGui.QWidget):
                     pts.append(ImportElevation.getSinglePointElevationFromBing(cords[1], cords[0]))
 
                 # Draw polygons/boundary:
-                Wire = Draft.makeWire(pts, closed=True, face=False, name="Polygon")
+                Wire = Draft.makeWire(pts, closed=True, face=False)
                 Wire.Label = "Polygon"
                 Draft.autogroup(Wire)
 

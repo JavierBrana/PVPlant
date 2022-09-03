@@ -353,7 +353,6 @@ def exportToPVC(path, exportTerrain = False):
     # xml: 4. library_geometries:
     library_geometries = SubElement(root, 'library_geometries')
     def add_geometry(objtype, vindex, findex, objind = 0, centers = None):
-
         isFrame = False
         if objtype == 0:
             geometryName = 'Frame'
@@ -365,8 +364,6 @@ def exportToPVC(path, exportTerrain = False):
         elif objtype == 2:
             geometryName = 'TerrainMesh'
             referenceSTR = 'TerrainMesh'
-
-
 
         geometry = SubElement(library_geometries, 'geometry')
         geometry.set('id', geometryName + '{0}'.format(objind))

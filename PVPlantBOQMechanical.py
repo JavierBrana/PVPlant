@@ -48,6 +48,9 @@ from openpyxl.styles import Alignment, Border, Side, PatternFill, GradientFill, 
 import PVPlantResources
 import PVPlantSite
 
+def getXYZMexh(frame):
+    posts = frame.Shape
+
 # Estilos:
 thin = Side(border_style="thin", color="7DA4B8")
 double = Side(border_style="double", color="ff0000")
@@ -171,7 +174,7 @@ def spreadsheetBOQPoles(sheet, sel):
     terrain = PVPlantSite.get().Terrain.Shape
     row = 3
     for frame_ind, frame in enumerate(sel):
-        if frame_ind == 10:
+        if frame_ind == 10: #debug
             break
 
         poles = frame.Shape.SubShapes[1].SubShapes
@@ -263,6 +266,7 @@ def spreadsheetBOQPanelCollision(sheet, sel):
         sheet['G{0}'.format(ind + 2)] = sel[ind].Placement.Rotation.toEuler()[1]
         sheet['H{0}'.format(ind + 2)] = sel[ind].NumberPole.Value
     mywb.save(filename)
+
 
 class _CommandBOQMechanical:
     def GetResources(self):

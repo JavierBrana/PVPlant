@@ -23,37 +23,6 @@ except AttributeError:
 import os
 from PVPlantResources import DirIcons as DirIcons
 
-
-def SurfaceToPoints(surface):
-    xmin = surface.BoundBox.XMin
-    xmax = surface.BoundBox.XMax
-    xlength = surface.BoundBox.XLenght
-    ymin = surface.BoundBox.YMin
-    ymax = surface.BoundBox.YMax
-    ylength = surface.BoundBox.YLenght
-    nondata = -999
-
-    #x, y, z = [pt['geometry']['coordinates'] for pt in shape]
-    #x, y , z = [pt.x, pt.y, pt.y for pt in surface.Mesh.Points]
-
-    '''
-    for point in surface.Mesh.Points:
-        x = point.x
-        y = point.y
-        z = point.z
-    '''
-
-    x = np.array(x)
-    y = np.array(y)
-    z = np.array(z)
-
-    xi = np.linspace(min(x), max(x))
-    yi = np.linspace(min(y), max(y))
-    X, Y = np.meshgrid(xi, yi)
-
-    Z = ml.griddata(x, y, z, xi, yi)
-
-
 def Mest2FemMesh(obj):
     import Fem
 
@@ -75,25 +44,27 @@ def Mest2FemMesh(obj):
     FreeCAD.activeDocument().recompute()
     return obj2
 
-def Contours_Mesh(Mesh, minor = 1000, mayor = 5000,
-                  minorColor=(0.0, 0.00, 0.80), mayorColor=(0.00, 0.00, 1.00),
-                  minorLineWidth = 2, mayorLineWidth = 5,
-                  filter_size = 5): #filter_size de 3 a 21 y siempre impar
+def makeContours(land, minor = 1000, mayor = 5000,
+                 minorColor=(0.0, 0.00, 0.80), mayorColor=(0.00, 0.00, 1.00),
+                 minorThickness = 2, mayorThickness = 5,
+                 filter_size = 5):
+    if not land:
+        return
 
-    filter_radius = int(filter_size / 2)
+    if land.TypeId == 'Mesh::Feature':
+        Contours_Mesh(land.Mesh, minor, mayor, minorColor, mayorColor, minorThickness, mayorThickness, filter_size)
+    else:
+        Contours_Part(land, minor, mayor, minorColor, mayorColor, minorThickness, mayorThickness, filter_size)
 
-    try:
-        Contours = FreeCAD.ActiveDocument.Contours
-    except:
-        Contours = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup", 'Contours')
+    FreeCAD.ActiveDocument.recompute()
 
-    if Mesh is not None:
-        ZMin = Mesh.BoundBox.ZMin // 10000
-        ZMin *= 10000
-        ZMax = Mesh.BoundBox.ZMax
+def Contours_Mesh(Mesh, minor, mayor,
+                  minorColor, mayorColor,
+                  minorLineWidth, mayorLineWidth,
+                  filter_size): #filter_size de 3 a 21 y siempre impar
 
-        inc = ZMin
-        while inc < ZMax:
+    def calculateSection(cuts):
+        for inc in cuts:
             CrossSections = Mesh.crossSections([((0, 0, inc), (0, 0, 1))], 0.000001)
 
             for PointList in CrossSections[0]:
@@ -152,31 +123,33 @@ def Contours_Mesh(Mesh, minor = 1000, mayor = 5000,
                         Contour.ViewObject.LineColor = minorColor
 
                     del Contour, PointList
-
             del CrossSections
-            inc += minor
-
-        FreeCAD.ActiveDocument.recompute()
-
-def Contours_Part(Terrain, minor = 1000, mayor = 5000,
-                  minorColor=(0.0, 0.00, 0.80), mayorColor=(0.00, 0.00, 1.00),
-                  minorLineWidth = 2, mayorLineWidth = 5,
-                  filter_size = 5): #filter_size from 3 to 21 and alwais it must be odd
 
     filter_radius = int(filter_size / 2)
-
     try:
         Contours = FreeCAD.ActiveDocument.Contours
     except:
         Contours = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup", 'Contours')
 
-    if Terrain is not None:
-        ZMin = Terrain.Shape.BoundBox.ZMin // 10000
-        ZMin *= 10000
-        ZMax = Terrain.Shape.BoundBox.ZMax
+    ZMin = Mesh.BoundBox.ZMin // 10000
+    ZMin *= 10000
+    ZMax = Mesh.BoundBox.ZMax
 
-        inc = ZMin
-        while inc < ZMax:
+    import numpy as np
+    minor_array = np.arange(ZMin, ZMax, minor)
+    mayor_array = np.arange(ZMin, ZMax, mayor)
+    minor_array = np.array(list(filter(lambda x: x not in mayor_array, minor_array)))
+    calculateSection(minor_array)
+    calculateSection(mayor_array)
+
+def Contours_Part(Terrain, minor, mayor,
+                  minorColor, mayorColor,
+                  minorLineWidth, mayorLineWidth,
+                  filter_size): #filter_size de 3 a 21 y siempre impar
+
+    def calculateSection(cuts):
+        cnt = 0
+        for inc in cuts:
             CrossSections = Terrain.Shape.slice(FreeCAD.Vector(0, 0, 1), inc)
 
             for wire in CrossSections:
@@ -238,8 +211,26 @@ def Contours_Part(Terrain, minor = 1000, mayor = 5000,
                     else:
                         Contour.ViewObject.LineWidth = minorLineWidth
                         Contour.ViewObject.LineColor = minorColor
-            inc += minor
-        FreeCAD.ActiveDocument.recompute()
+            cnt += 1
+            if cnt == 10:
+                return
+
+    filter_radius = int(filter_size / 2)
+    try:
+        Contours = FreeCAD.ActiveDocument.Contours
+    except:
+        Contours = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup", 'Contours')
+
+    ZMin = Terrain.Shape.BoundBox.ZMin // 10000
+    ZMin *= 10000
+    ZMax = Terrain.Shape.BoundBox.ZMax
+
+    import numpy as np
+    minor_array = np.arange(ZMin, ZMax, minor)
+    mayor_array = np.arange(ZMin, ZMax, mayor)
+    minor_array = np.array(list(filter(lambda x: x not in mayor_array, minor_array)))
+    calculateSection(minor_array)
+    calculateSection(mayor_array)
 
 # Base widget for task panel terrain analisys
 class _generalTaskPanel:
@@ -427,8 +418,8 @@ class _ContourTaskPanel():
     def add(self):
         sel = FreeCADGui.Selection.getSelection()
         if len(sel) > 0:
-            land = sel[0]
-            self.lineEdit1.setText(land.Label)
+            self.land = sel[0]
+            self.lineEdit1.setText(self.land.Label)
 
     def selColor(self, button):
         color = QtGui.QColorDialog.getColor()
@@ -447,27 +438,24 @@ class _ContourTaskPanel():
             self.MayorColor = col
 
     def accept(self):
-        if land is None:
+        from datetime import datetime
+        starttime = datetime.now()
+
+        if self.land is None:
             print("No hay objetos para procesar")
             return False
         else:
             minor = FreeCAD.Units.Quantity(self.inputMinorContourMargin.currentText()).Value
             mayor = FreeCAD.Units.Quantity(self.inputMayorContourMargin.currentText()).Value
 
-            i = 0
+            i = 2
             if i == 0:
-                if land.TypeId == 'Mesh::Feature':
-                    Contours_Mesh(land.Mesh, minor, mayor, self.MinorColor, self.MayorColor,
+                makeContours(self.land, minor, mayor, self.MinorColor, self.MayorColor,
                           self.inputMinorContourThickness.value(), self.inputMayorContourThickness.value())
-                else:
-                    Contours_Part(land, minor, mayor, self.MinorColor, self.MayorColor,
-                              self.inputMinorContourThickness.value(), self.inputMayorContourThickness.value())
-
-
             elif i == 1:
                 import multiprocessing
-                p = multiprocessing.Process(target=Contours_Mesh,
-                                            args=(land.Mesh, minor, mayor,
+                p = multiprocessing.Process(target=makeContours,
+                                            args=(self.land, minor, mayor,
                                                   self.MinorColor, self.MayorColor,
                                                   self.inputMinorContourThickness.value(),
                                                   self.inputMayorContourThickness.value(), ))
@@ -476,15 +464,18 @@ class _ContourTaskPanel():
 
             else:
                 import threading
-                hilo = threading.Thread(target = Contours_Mesh,
-                                        args = (land.Mesh, minor, mayor,
+                hilo = threading.Thread(target = makeContours,
+                                        args = (self.land, minor, mayor,
                                                 self.MinorColor, self.MayorColor,
                                                 self.inputMinorContourThickness.value(),
                                                 self.inputMayorContourThickness.value()))
                 hilo.daemon = True
                 hilo.start()
 
-            return True
+        total_time = datetime.now() - starttime
+        print(" -- Tiempo tardado:", total_time)
+        FreeCADGui.Control.closeDialog()
+        return True
 
 # Height Analisys: ---------------------------------------------------------------------------------
 class _HeightTaskPanel(_generalTaskPanel):

@@ -41,28 +41,6 @@ class _TaskPanel:
         self.form = FreeCADGui.PySideUic.loadUi(os.path.dirname(__file__) + "/PVPlantCreateTerrainMesh.ui")
         self.form.buttonAdd.clicked.connect(self.add)
 
-    ''' future:
-    def retranslateUi(self, dialog):
-        from PySide import QtGui
-        self.form.setWindowTitle("Configuracion del Rack")
-        self.labelModule.setText(QtGui.QApplication.translate("PVPlant", "Modulo:", None))
-        self.labelModuleLength.setText(QtGui.QApplication.translate("PVPlant", "Longitud:", None))
-        self.labelModuleWidth.setText(QtGui.QApplication.translate("PVPlant", "Ancho:", None))
-        self.labelModuleHeight.setText(QtGui.QApplication.translate("PVPlant", "Alto:", None))
-        self.labelModuleFrame.setText(QtGui.QApplication.translate("PVPlant", "Ancho del marco:", None))
-        self.labelModuleColor.setText(QtGui.QApplication.translate("PVPlant", "Color del modulo:", None))
-        self.labelModules.setText(QtGui.QApplication.translate("Arch", "Colocacion de los Modulos", None))
-        self.labelModuleOrientation.setText(QtGui.QApplication.translate("Arch", "Orientacion del modulo:", None))
-        self.labelModuleGapX.setText(QtGui.QApplication.translate("Arch", "Separacion Horizontal (mm):", None))
-        self.labelModuleGapY.setText(QtGui.QApplication.translate("Arch", "Separacion Vertical (mm):", None))
-        self.labelModuleRows.setText(QtGui.QApplication.translate("Arch", "Filas de modulos:", None))
-        self.labelModuleCols.setText(QtGui.QApplication.translate("Arch", "Columnas de modulos:", None))
-        self.labelRack.setText(QtGui.QApplication.translate("Arch", "Configuracion de la estructura", None))
-        self.labelRackType.setText(QtGui.QApplication.translate("Arch", "Tipo de estructura:", None))
-        self.labelLevel.setText(QtGui.QApplication.translate("Arch", "Nivel:", None))
-        self.labelOffset.setText(QtGui.QApplication.translate("Arch", "Offset", None))
-    '''
-
     def add(self):
         sel = FreeCADGui.Selection.getSelection()
         if len(sel) > 0:
@@ -186,16 +164,16 @@ class _TaskPanel:
     def reject(self):
         FreeCADGui.Control.closeDialog()
 
-
-def Triangulate(Points, MaxlengthLE = 8000, MaxAngleLE = math.pi/2):  ## multiprocessing
+def Triangulate(Points, MaxlengthLE = 8000, MaxAngleLE = math.pi/2):
     import numpy as np
     from scipy.spatial import Delaunay
-    from stl import mesh
+    from stl import mesh as stlmesh
     import Mesh
 
     tri = Delaunay(Points[:, :2])
     faces = tri.simplices
-    wireframe = mesh.Mesh(np.zeros(faces.shape[0], dtype=mesh.Mesh.dtype))
+    wireframe = stlmesh.Mesh(np.zeros(faces.shape[0], dtype=stlmesh.Mesh.dtype))
+
     for i, f in enumerate(faces):
         if MaxLength(Points[f[0]], Points[f[1]], Points[f[2]], MaxlengthLE) and \
            MaxAngle(Points[f[0]], Points[f[1]], Points[f[2]], MaxAngleLE):
@@ -204,6 +182,8 @@ def Triangulate(Points, MaxlengthLE = 8000, MaxAngleLE = math.pi/2):  ## multipr
 
     MeshObject = Mesh.Mesh(wireframe.vectors.tolist())
     MeshObject.harmonizeNormals()
+    if len(MeshObject.Facets) == 0:
+        return None
     if MeshObject.Facets[0].Normal.z < 0:
         MeshObject.flipNormals()
     return MeshObject
@@ -271,13 +251,3 @@ class _PVPlantCreateTerrainMesh:
 
 if FreeCAD.GuiUp:
     FreeCADGui.addCommand('PVPlantCreateTerrainMesh', _PVPlantCreateTerrainMesh())
-
-
-def toShape():
-    from datetime import datetime
-    starttime = datetime.now()
-    mesh = FreeCAD.ActiveDocument.Surface
-    shape = Part.Shape()
-    shape.makeShapeFromMesh(mesh.Mesh.Topology, 0.1)
-    Part.show(shape)
-    print(datetime.now() - starttime)

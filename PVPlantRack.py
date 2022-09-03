@@ -1228,6 +1228,29 @@ class _CommandTracker:
         FreeCADGui.Control.showDialog(self.TaskPanel)
         return
 
+class _CommandMultiRowTracker:
+    "the Arch Building command definition"
+
+    def GetResources(self):
+        return {'Pixmap': str(os.path.join(DirIcons, "solar-tracker.svg")),
+                'MenuText': "Multi-row Tracker",
+                'Accel': "R, M",
+                'ToolTip': "Creates a multi-row Tracker object from trackers."}
+
+    def IsActive(self):
+        return not FreeCAD.ActiveDocument is None
+
+        if FreeCAD.ActiveDocument is not None:
+            if FreeCADGui.Selection.getCompleteSelection():
+                for ob in FreeCAD.ActiveDocument.Objects:
+                    if ob.Name[:4] == "Site":
+                        return True
+
+    def Activated(self):
+        self.TaskPanel = _FixedRackTaskPanel()
+        FreeCADGui.Control.showDialog(self.TaskPanel)
+        return
+
 
 if FreeCAD.GuiUp:
     class CommandRackGroup:
@@ -1248,6 +1271,7 @@ if FreeCAD.GuiUp:
 
     FreeCADGui.addCommand('PVPlantFixedRack', _CommandFixedRack())
     FreeCADGui.addCommand('PVPlantTracker', _CommandTracker())
+    FreeCADGui.addCommand('Multirow', _CommandMultiRowTracker())
     FreeCADGui.addCommand('RackType', CommandRackGroup())
 
     '''# -*- coding: utf-8 -*-
