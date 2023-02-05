@@ -21,27 +21,6 @@
       <string>Configuración</string>
      </property>
      <layout class="QGridLayout" name="gridLayout_2">
-      <item row="3" column="0">
-       <widget class="QLabel" name="label_2">
-        <property name="text">
-         <string>Dirección Horizontal</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="0">
-       <widget class="QLabel" name="label_11">
-        <property name="text">
-         <string>Dirección Vertical</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="0">
-       <widget class="QLabel" name="label_4">
-        <property name="text">
-         <string>Posicionar</string>
-        </property>
-       </widget>
-      </item>
       <item row="3" column="1" colspan="2">
        <widget class="QComboBox" name="comboDirH">
         <item>
@@ -61,23 +40,38 @@
         </item>
        </widget>
       </item>
-      <item row="6" column="0">
-       <widget class="QLabel" name="label_9">
+      <item row="0" column="1" colspan="2">
+       <widget class="QComboBox" name="comboOrientation">
+        <item>
+         <property name="text">
+          <string>Individual</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Linea longitudinal</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="label_11">
         <property name="text">
-         <string>Offset Vertical</string>
+         <string>Dirección Vertical</string>
         </property>
        </widget>
       </item>
-      <item row="6" column="1" colspan="2">
-       <widget class="QLineEdit" name="editOffsetVertical"/>
-      </item>
-      <item row="5" column="1" colspan="2">
-       <widget class="QLineEdit" name="editOffsetHorizontal"/>
-      </item>
-      <item row="5" column="0">
-       <widget class="QLabel" name="label_7">
+      <item row="3" column="0">
+       <widget class="QLabel" name="label_2">
         <property name="text">
-         <string>Offset Horizontal</string>
+         <string>Dirección Horizontal</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_4">
+        <property name="text">
+         <string>Med</string>
         </property>
        </widget>
       </item>
@@ -100,20 +94,6 @@
         </item>
        </widget>
       </item>
-      <item row="0" column="1" colspan="2">
-       <widget class="QComboBox" name="comboOrientation">
-        <item>
-         <property name="text">
-          <string>Individual</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Linea longitudinal</string>
-         </property>
-        </item>
-       </widget>
-      </item>
      </layout>
     </widget>
    </item>
@@ -122,16 +102,32 @@
      <property name="title">
       <string>GroupBox</string>
      </property>
-     <layout class="QVBoxLayout" name="verticalLayout_2">
-      <item>
-       <widget class="QCheckBox" name="checkBox_2">
-        <property name="text">
-         <string>Evitar escalonado entre estructuras contiguas</string>
+     <layout class="QGridLayout" name="gridLayout">
+      <item row="1" column="1">
+       <widget class="QSpinBox" name="editStepSize">
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="suffix">
+         <string> mm</string>
+        </property>
+        <property name="maximum">
+         <number>1000</number>
+        </property>
+        <property name="value">
+         <number>250</number>
         </property>
        </widget>
       </item>
-      <item>
-       <widget class="QCheckBox" name="checkBox">
+      <item row="1" column="0">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Escalón</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0" colspan="2">
+       <widget class="QCheckBox" name="checkTrenck">
         <property name="text">
          <string>Ajustal a la media de la curva</string>
         </property>
@@ -159,8 +155,6 @@
   <tabstop>comboOrientation</tabstop>
   <tabstop>comboDirH</tabstop>
   <tabstop>comboDirV</tabstop>
-  <tabstop>editOffsetHorizontal</tabstop>
-  <tabstop>editOffsetVertical</tabstop>
  </tabstops>
  <resources/>
  <connections/>

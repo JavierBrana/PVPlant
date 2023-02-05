@@ -28,9 +28,10 @@ class _CommandReload:
             PVPlantFoundation, PVPlantTreeGenerator, PVPlantBuilding, exportPVSyst, \
             PVPlantTrench, PVPlantEarthWorks, PVPlantStringBox, PVPlantCable, PVPlantPad, \
             PVPlantRoad, PVPlantTerrain, PVPlantStringing, PVPlantManhole, \
-            PVPlantBOQMechanical, PVPlantBOQElectrical, PVPlantArea, GraphProfile
+            PVPlantBOQMechanical, PVPlantBOQElectrical, PVPlantArea, GraphProfile, \
+            exportDXF, importDXF
         from Utils import PVPlantUtils
-        from Utils import PVPlantTrace, gui_edit, profile_editor, graphics
+        from Utils import PVPlantTrace, m_gui_edit, profile_editor, graphics
         #from  Lib import GoogleMapDownloader
 
         import importlib
@@ -63,9 +64,12 @@ class _CommandReload:
         importlib.reload(GraphProfile)
 
         importlib.reload(PVPlantTrace)
-        importlib.reload(gui_edit)
+        importlib.reload(m_gui_edit)
         importlib.reload(profile_editor)
         importlib.reload(graphics)
+
+        importlib.reload(importDXF)
+        importlib.reload(exportDXF)
 
         #importlib.reload(GoogleMapDownloader)
         print("Reload modules...")

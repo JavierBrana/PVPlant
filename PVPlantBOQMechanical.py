@@ -48,9 +48,6 @@ from openpyxl.styles import Alignment, Border, Side, PatternFill, GradientFill, 
 import PVPlantResources
 import PVPlantSite
 
-def getXYZMexh(frame):
-    posts = frame.Shape
-
 # Estilos:
 thin = Side(border_style="thin", color="7DA4B8")
 double = Side(border_style="double", color="ff0000")
@@ -141,6 +138,7 @@ def spreadsheetBOQFrames(sheet, sel):
                     alignment=Alignment(horizontal="center", vertical="center"))
 
 def spreadsheetBOQPoles(sheet, sel):
+    import MeshPart as mp
     # Headers:
     sheet['A1'] = 'Frame'
     sheet['B1'] = 'Pole'
@@ -171,20 +169,20 @@ def spreadsheetBOQPoles(sheet, sel):
     sheet.row_dimensions[2].height = 5
 
     # Data:
-    terrain = PVPlantSite.get().Terrain.Shape
+    terrain = PVPlantSite.get().Terrain.Mesh #Shape
+    terrain = FreeCAD.ActiveDocument.Mesh002.Mesh
     row = 3
     for frame_ind, frame in enumerate(sel):
-        if frame_ind == 10: #debug
-            break
-
         poles = frame.Shape.SubShapes[1].SubShapes
         group_from = row
-        frame_line = Part.LineSegment(poles[0].BoundBox.Center, poles[-1].BoundBox.Center)
-        frame_line_projection = terrain.makeParallelProjection(frame_line.toShape(), FreeCAD.Vector(0,0,1))
+        #frame_line = Part.LineSegment(poles[0].BoundBox.Center, poles[-1].BoundBox.Center)
+        #frame_line_projection = terrain.makeParallelProjection(frame_line.toShape(), FreeCAD.Vector(0,0,1))
+
         for pole_ind, pole in enumerate(poles):
             zattach = .0
             center = pole.BoundBox.Center
-            down = FreeCAD.Vector(center.x, center.y, terrain.BoundBox.ZMin)
+
+            '''down = FreeCAD.Vector(center.x, center.y, terrain.BoundBox.ZMin)
             top = FreeCAD.Vector(center.x, center.y, terrain.BoundBox.ZMax)
             pole_axis = Part.LineSegment(top, down)
             for ed in frame_line_projection.Edges:
@@ -192,7 +190,13 @@ def spreadsheetBOQPoles(sheet, sel):
                 result = pole_axis.intersect(tmp)
                 if len(result) > 0:
                     zattach = result[0].Z
-                    break
+                    break'''
+
+            pp = mp.projectPointsOnMesh([center], terrain, FreeCAD.Vector(0, 0, 1))
+            if len(pp) == 0:
+                zattach = -999
+            else:
+                zattach = pp[0].z
 
             sheet['B{0}'.format(row)] = pole_ind + 1
             sheet['C{0}'.format(row)] = pole.Placement.Base.x * scale
@@ -220,7 +224,6 @@ def spreadsheetBOQPoles(sheet, sel):
                     border=Border(top=thin, left=thin, right=thin, bottom=thin),
                     font=Font(name='Gill Sans MT', size=11,),
                     alignment=Alignment(horizontal="center", vertical="center"))
-
         sheet['A{0}'.format(row)] = ""
         sheet.row_dimensions[row].height = 5
         row += 1
@@ -277,7 +280,6 @@ class _CommandBOQMechanical:
 
     def Activated(self):
         # make file global:
-
         sel = FreeCAD.ActiveDocument.findObjects(Name="Tracker")
         if len(sel) > 0:
             path = os.path.dirname(FreeCAD.ActiveDocument.FileName)
@@ -289,12 +291,6 @@ class _CommandBOQMechanical:
 
             sheet = mywb.create_sheet("Poles information")
             spreadsheetBOQPoles(sheet, sel)
-
-            ''' Frame collision???:
-            sheet = mywb.create_sheet("Frame collision")
-            spreadsheetBOQPanelCollision(sheet, sel)
-            '''
-
             mywb.save(filename)
 
     def IsActive(self):

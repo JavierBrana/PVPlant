@@ -19,6 +19,7 @@
 # * USA                                                                 *
 # *                                                                     *
 # ***********************************************************************
+import math
 
 import FreeCAD
 import ArchComponent
@@ -31,12 +32,12 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui, QtSvg
     from DraftTools import translate
     from PySide.QtCore import QT_TRANSLATE_NOOP
+    from pivy import coin
 
 else:
     # \cond
     def translate(ctxt, txt):
         return txt
-
 
     def QT_TRANSLATE_NOOP(ctxt, txt):
         return txt
@@ -50,15 +51,177 @@ import os
 import PVPlantResources
 from PVPlantResources import DirIcons as DirIcons
 
+def selectFrames():
+    objectlist = list()
+    #FreeCAD.ActiveDocument.findObjects(Name="Tracker")
+    for obj in FreeCAD.ActiveDocument.Objects:
+        if hasattr(obj, "Proxy") and obj.Proxy.isDerivedFrom("Frame"):
+            objectlist.append(obj)
+    return objectlist if len(objectlist) > 0 else None
 
-class _Frame(ArchComponent.Component):
+def makeFrameSetup(name="FrameSetup"):
+    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", name)
+    FrameSetup(obj)
+    ViewProviderFrameSetup(obj.ViewObject)
+    return obj
+
+class FrameSetup:
+    "A Base Frame Setup Class"
+    def __init__(self, obj):
+        # Definición de Variables:
+        self.obj = obj
+
+    def setProperties(self, obj):
+        ''' Definición de Propiedades: '''
+        pl = obj.PropertiesList
+        # Modulo: ------------------------------------------------------------------------------------------------------
+        if not "ModuleThick" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "ModuleThick",
+                            "Module",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleThick = 40
+
+        if not "ModuleWidth" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "ModuleWidth",
+                            "Module",
+                            QT_TRANSLATE_NOOP("App::Property", "The width of this object")
+                            ).ModuleWidth = 1130
+
+        if not "ModuleHeight" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "ModuleHeight",
+                            "Module",
+                            QT_TRANSLATE_NOOP("App::Property", "The Length of this object")
+                            ).ModuleHeight = 2250
+
+        if not "PoleCableLength" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "PoleCableLength",
+                            "Module",
+                            QT_TRANSLATE_NOOP("App::Property", "The Length of this object")
+                            ).PoleCableLength = 1200
+
+        if not "ModulePower" in pl:
+            obj.addProperty("App::PropertyQuantity",
+                            "ModulePower",
+                            "Module",
+                            QT_TRANSLATE_NOOP("App::Property", "The Length of this object")
+                            ).ModulePower = 600
+
+        # Array de modulos: -------------------------------------------------------------------------------------------
+        if not "ModuleColumns" in pl:
+            obj.addProperty("App::PropertyQuantity",
+                            "ModuleColumns",
+                            "ModuleArray",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleColumns = 2
+
+        if not "ModuleRows" in pl:
+            obj.addProperty("App::PropertyQuantity",
+                            "ModuleRows",
+                            "ModuleArray",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleRows = 2
+
+        if not "ModuleColGap" in pl:
+            obj.addProperty("App::PropertyDistance",
+                            "ModuleColGap",
+                            "ModuleArray",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleColGap = 20
+
+        if not "ModuleRowGap" in pl:
+            obj.addProperty("App::PropertyDistance",
+                            "ModuleRowGap",
+                            "ModuleArray",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleRowGap = 20
+
+        if not "ModuleOffsetX" in pl:
+            obj.addProperty("App::PropertyDistance",
+                            "ModuleOffsetX",
+                            "ModuleArray",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleOffsetX = 0
+
+        if not "ModuleOffsetY" in pl:
+            obj.addProperty("App::PropertyDistance",
+                            "ModuleOffsetY",
+                            "ModuleArray",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ModuleOffsetY = 0
+
+        if not "ModuleOrientation" in pl:
+            obj.addProperty("App::PropertyEnumeration",
+                            "ModuleOrientation",
+                            "ModuleArray",
+                            QT_TRANSLATE_NOOP("App::Property",
+                                              "The facemaker type to use to build the profile of this object")
+                            ).ModuleOrientation = ["Portrait", "Landscape"]
+
+        if not "ModuleViews" in pl:
+            obj.addProperty("App::PropertyBool",
+                            "ModuleViews",
+                            "ModuleArray",
+                            QT_TRANSLATE_NOOP("App::Property",
+                                              "The facemaker type to use to build the profile of this object")
+                            ).ModuleViews = True
+
+        # Frame --------------------------------------------------------------------------------------------------------
+        '''if not "Tilt" in pl:
+            obj.addProperty("App::PropertyAngle",
+                            "Tilt",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).Tilt = 30'''
+
+        if not "MaxLengthwiseTilt" in pl:
+            obj.addProperty("App::PropertyAngle",
+                            "MaxLengthwiseTilt",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property", "Máxima inclinación longitudinal")
+                            ).MaxLengthwiseTilt = 15
+
+        if not "Width" in pl:
+            obj.addProperty("App::PropertyDistance",
+                            "Width",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property",
+                                              "Largo de la estructura")
+                            )
+            obj.setEditorMode("Width", 1)
+
+        if not "Length" in pl:
+            obj.addProperty("App::PropertyDistance",
+                            "Length",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property",
+                                              "Ancho de la estructura")
+                            )
+            obj.setEditorMode("Length", 1)
+
+        if not "TotalAreaShape" in pl:
+            obj.addProperty("App::PropertyDistance",
+                            "TotalAreaShape",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("Part::PropertyPartShape",
+                                              "Total Area de los Paneles")
+                            )
+            obj.setEditorMode("TotalAreaShape", 1)
+
+    def onChanged(self, obj, prop):
+        '''  '''
+
+class Frame(ArchComponent.Component):
     "A Base Frame Obcject - Class"
 
     def __init__(self, obj):
         # Definición de Variables:
         ArchComponent.Component.__init__(self, obj)
         self.obj = obj
-        self.setCommonProperties(obj)
+        self.setProperties(obj)
 
         # Does a IfcType exist?
         obj.IfcType = "Structural Item"
@@ -67,8 +230,9 @@ class _Frame(ArchComponent.Component):
         self.totalAreaShape = None
         self.changed = True
 
-    def setCommonProperties(self, obj):
+    def setProperties(self, obj):
         # Definicion de Propiedades:
+        print("Frame - setProperties")
         ArchComponent.Component.setProperties(self, obj)
 
         pl = obj.PropertiesList
@@ -111,36 +275,42 @@ class _Frame(ArchComponent.Component):
                             "Posicion de modulos",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).ModuleCols = 15
+
         if not "ModuleRows" in pl:
             obj.addProperty("App::PropertyQuantity",
                             "ModuleRows",
                             "Posicion de modulos",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).ModuleRows = 2
+
         if not "ModuleColGap" in pl:
             obj.addProperty("App::PropertyDistance",
                             "ModuleColGap",
                             "Posicion de modulos",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).ModuleColGap = 20
-        if not "MotorGap" in pl:
+
+        if not "ModuleRowGap" in pl:
             obj.addProperty("App::PropertyDistance",
                             "ModuleRowGap",
                             "Posicion de modulos",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).ModuleRowGap = 20
+
         if not "ModuleOffsetX" in pl:
             obj.addProperty("App::PropertyDistance",
                             "ModuleOffsetX",
                             "Posicion de modulos",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).ModuleOffsetX = 0
+
         if not "ModuleOffsetY" in pl:
             obj.addProperty("App::PropertyDistance",
                             "ModuleOffsetY",
                             "Posicion de modulos",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).ModuleOffsetY = 0
+
         if not "ModuleOrientation" in pl:
             obj.addProperty("App::PropertyEnumeration",
                             "ModuleOrientation",
@@ -148,6 +318,7 @@ class _Frame(ArchComponent.Component):
                             QT_TRANSLATE_NOOP("App::Property",
                                               "The facemaker type to use to build the profile of this object")
                             ).ModuleOrientation = ["Portrait", "Landscape"]
+
         if not "ModuleViews" in pl:
             obj.addProperty("App::PropertyBool",
                             "ModuleViews",
@@ -180,34 +351,72 @@ class _Frame(ArchComponent.Component):
                             QT_TRANSLATE_NOOP("App::Property", "Máxima inclinación longitudinal")
                             ).MaxLengthwiseTilt = 15
 
+        # Frame outputs -----------------------------
         if not "Width" in pl:
             obj.addProperty("App::PropertyDistance",
                             "Width",
                             "Frame",
                             QT_TRANSLATE_NOOP("App::Property",
-                                              "Largo de la estructura")
+                                              "Ancho de la estructura")
                             )
-            obj.setEditorMode("Width", 1)
+        obj.setEditorMode("Width", 1)
 
         if not "Length" in pl:
             obj.addProperty("App::PropertyDistance",
                             "Length",
                             "Frame",
                             QT_TRANSLATE_NOOP("App::Property",
-                                              "Ancho de la estructura")
+                                              "Largo de la estructura")
                             )
-            obj.setEditorMode("Length", 1)
+        obj.setEditorMode("Length", 1)
 
-        if not "TotalAreaShape" in pl:
-            obj.addProperty("App::PropertyDistance",
-                            "TotalAreaShape",
+        if not "TotalArea" in pl:
+            obj.addProperty("App::PropertyArea",
+                            "TotalArea",
                             "Frame",
                             QT_TRANSLATE_NOOP("Part::PropertyPartShape",
-                                              "Total Area de los Paneles")
+                                              "Area total de los Paneles")
                             )
-            obj.setEditorMode("TotalAreaShape", 1)
+        obj.setEditorMode("TotalArea", 1)
 
-        # Placement
+
+        # Neighbours:
+
+        if not "North" in pl:
+            obj.addProperty("App::PropertyLink",
+                            "North",
+                            "Neighbours",
+                            QT_TRANSLATE_NOOP("Part::PropertyPartShape",
+                                              "Area total de los Paneles")
+                            )
+
+        if not "South" in pl:
+            obj.addProperty("App::PropertyLink",
+                            "South",
+                            "Neighbours",
+                            QT_TRANSLATE_NOOP("Part::PropertyPartShape",
+                                              "Area total de los Paneles")
+                            )
+
+        if not "East" in pl:
+            obj.addProperty("App::PropertyLink",
+                            "East",
+                            "Neighbours",
+                            QT_TRANSLATE_NOOP("Part::PropertyPartShape",
+                                              "Area total de los Paneles")
+                            )
+
+        if not "West" in pl:
+            obj.addProperty("App::PropertyLink",
+                            "West",
+                            "Neighbours",
+                            QT_TRANSLATE_NOOP("Part::PropertyPartShape",
+                                              "Area total de los Paneles")
+                            )
+
+
+
+        '''# Placement
         if not "Route" in pl:
             obj.addProperty("App::PropertyLink",
                             "Route",
@@ -224,11 +433,15 @@ class _Frame(ArchComponent.Component):
                             QT_TRANSLATE_NOOP("Part::PropertyPartShape",
                                               "Total Area de los Paneles")
                             )
-        obj.setEditorMode("RouteSection", 1)
+        obj.setEditorMode("RouteSection", 1)'''
 
         self.Type = "Frame"
 
     def onChanged(self, obj, prop):
+        if prop == "North":
+            if obj.getPropertyByName(prop):
+                obj.getPropertyByName("Route").South = obj
+
         if (prop == "Route"):
             if obj.getPropertyByName(prop):
                 obj.RouteSection = (1, 1, len(obj.getPropertyByName("Route").Shape.Edges) + 1, 1)
@@ -248,20 +461,19 @@ def makeRack(name="Rack"):
     return obj
 
 
-class _FixedRack(_Frame):
+class _FixedRack(Frame):
     "A Fixed Rack Obcject"
 
     def __init__(self, obj):
         # Definición de Variables:
-        _Frame.__init__(self, obj)
-        _Frame.setProperties(self, obj)
+        Frame.__init__(self, obj)
+        Frame.setProperties(self, obj)
         self.setProperties(obj)
         # Does a IfcType exist?
         # obj.IfcType = "Fence"
         # obj.MoveWithHost = False
 
     def setProperties(self, obj):
-
         pl = obj.PropertiesList
 
         # Array of Posts: ------------------------------------------------------------------------------------------------------
@@ -558,9 +770,7 @@ class _ViewProviderFixedRack(ArchComponent.ViewProviderComponent):
             taskd.obj = self.Object
             FreeCADGui.Control.showDialog(taskd)
             return True
-
         return False
-
 
 class _FixedRackTaskPanel:
     def __init__(self, obj=None):
@@ -610,46 +820,43 @@ class _FixedRackTaskPanel:
 
 
 ''' ------------------------------------------- Tracker Structure --------------------------------------------------- '''
-
-
-def makeTracker(name="Tracker"):
-    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Tracker")
+def makeTrackerSetup(name="TrackerSetup"):
+    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "TrackerSetup")
     obj.Label = name
-    _Tracker(obj)
-    _ViewProviderTracker(obj.ViewObject)
+    TrackerSetup(obj)
+    ViewProviderTrackerSetup(obj.ViewObject)
     FreeCAD.ActiveDocument.recompute()
-
-    site = PVPlantSite.get()
-    frame_list = site.Frames
-    frame_list.append(obj)
-    site.Frames = frame_list
-
+    try:
+        site = PVPlantSite.get()
+        frame_list = site.Frames
+        frame_list.append(obj)
+        site.Frames = frame_list
+    except:
+        pass
     return obj
 
-
-class _Tracker(_Frame):
+class TrackerSetup(FrameSetup):
     "A 1 Axis Tracker Obcject"
 
     def __init__(self, obj):
-        # Definición de Variables:
-        _Frame.__init__(self, obj)
+        FrameSetup.__init__(self, obj)
         self.setProperties(obj)
-
-        obj.ModuleCols = 45
+        obj.ModuleColumns = 45
         obj.ModuleRows = 2
         obj.ModuleColGap = 20
         obj.ModuleRowGap = 20
-        obj.Tilt = 0
+        #obj.Tilt = 0
 
     def setProperties(self, obj):
+        FrameSetup.setProperties(self, obj)
         pl = obj.PropertiesList
 
         # Array de modulos: -------------------------------------------------------------------------------------------
         if not "MotorGap" in pl:
             obj.addProperty("App::PropertyDistance",
                             "MotorGap",
-                            "Posicion de modulos",
-                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            "ModuleArray",
+                            QT_TRANSLATE_NOOP("App::Property", "Thse height of this object")
                             ).MotorGap = 550
 
         if not "UseGroupsOfModules" in pl:
@@ -660,6 +867,7 @@ class _Tracker(_Frame):
                             ).UseGroupsOfModules = False
 
         # Poles: ------------------------------------------------------------------------------------------------------
+        #TODO: cambiar todo esto por una lista de objetos??
         if not "PoleHeight" in pl:
             obj.addProperty("App::PropertyLength",
                             "PoleHeight",
@@ -690,19 +898,26 @@ class _Tracker(_Frame):
                             ).NumberPole = 7
 
         if not "DistancePole" in pl:
-            obj.addProperty("App::PropertyFloatList",  # No list of Lenght so I use float list
+            obj.addProperty("App::PropertyIntegerList",  # No list of Lenght so I use float list
                             "DistancePole",
                             "Poles",
                             "Distance between poles starting from the left and from the first photovoltaic module "
                             "without taking into account the offsets"
-                            ).DistancePole = [1500.0, 3000.0, 7000.0, 7000.0, 7000.0, 7000.0, 7000.0]
+                            ).DistancePole = [7000, 7000, 7000, 7000, 7000, 7000, 7000]
 
         if not "AerialPole" in pl:
-            obj.addProperty("App::PropertyLength",
+            obj.addProperty("App::PropertyIntegerList",
                             "AerialPole",
                             "Poles",
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
-                            ).AerialPole = 1050
+                            ).AerialPole = [1050]
+
+        if not "Poles" in pl:
+            obj.addProperty("App::PropertyLinkList",
+                            "Poles",
+                            "Poles",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            )
 
         # Correas: ----------------------------------------------------------------------------------------------------
         # 1. MainBeam: -------------------------------------------------------------------------------------------------
@@ -777,27 +992,32 @@ class _Tracker(_Frame):
                             QT_TRANSLATE_NOOP("App::Property", "The height of this object")
                             ).MinPhi = -60
 
+        if not "MaxNegativeLengthwiseTilt" in pl:
+            obj.addProperty("App::PropertyAngle",
+                            "MaxNegativeLengthwiseTilt",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MaxNegativeLengthwiseTilt = 6
+
         self.Type = "1 Axis Tracker"
         obj.Proxy = self
 
     def onDocumentRestored(self, obj):
-        ArchComponent.Component.onDocumentRestored(self, obj)
         self.setProperties(obj)
 
     def onChanged(self, obj, prop):
         '''Do something when a property has changed'''
-
-        _Frame.onChanged(self, obj, prop)
-
+        FrameSetup.onChanged(self, obj, prop)
         '''
-        ['Additions', 'AerialPole', 'Axis', 'Base', 'BeamHeight', 'BeamOffset', 'BeamSpacing', 'BeamWidth', 'CloneOf', 
+        ['Additions', 'AerialPole', 'Axis', 'Base', 'BeamHeight', 'BeamOffset', 'BeamSpacing', 'BeamWidth', 'CloneOf',
         'Description', 'DistancePole', 'ExpressionEngine', 'HiRes', 'HorizontalArea', 'IfcData', 'IfcProperties', 
         'IfcType', 'Label', 'Label2', 'Length', 'MainBeamAxisPosition', 'MainBeamHeight', 'MainBeamWidth', 'Material', 
-        'MaxLengthwiseTilt', 'MaxPhi', 'MinPhi', 'ModuleColGap', 'ModuleCols', 'ModuleHeight', 'ModuleOffsetX', 
-        'ModuleOffsetY', 'ModuleOrientation', 'ModulePower', 'ModuleRowGap', 'ModuleRows', 'ModuleThick', 'ModuleViews',
-        'ModuleWidth', 'Modules', 'MotorGap', 'MoveBase', 'MoveWithHost', 'NumberPole', 'PerimeterLength', 'Placement',
-        'PoleCableLength', 'PoleHeight', 'PoleLength', 'PoleWidth', 'Proxy', 'Shape', 'ShowBeams', 'StandardCode', 
-        'Subtractions', 'Tag', 'Tilt', 'TotalAreaShape', 'VerticalArea', 'Visibility', 'Width']
+        'MaxLengthwiseTilt', 'MaxNegativeLengthwiseTilt', 'MaxPhi', 'MinPhi', 'ModuleColGap', 'ModuleCols', 
+        'ModuleHeight', 'ModuleOffsetX', 'ModuleOffsetY', 'ModuleOrientation', 'ModulePower', 'ModuleRowGap', 
+        'ModuleRows', 'ModuleThick', 'ModuleViews', 'ModuleWidth', 'MotorGap', 'MoveBase', 'MoveWithHost', 'NumberPole', 
+        'PerimeterLength', 'Placement', 'PoleCableLength', 'PoleHeight', 'PoleLength', 'PoleWidth', 'Proxy', 'Route', 
+        'RouteSection', 'Shape', 'ShowBeams', 'StandardCode', 'Subtractions', 'Tag', 'Tilt', 'TotalAreaShape', 
+        'UseGroupsOfModules', 'VerticalArea', 'Visibility', 'Width']
         '''
 
         if prop == "UseGroupsOfModules":
@@ -822,16 +1042,545 @@ class _Tracker(_Frame):
                 if "GroupGaps" in obj.PropertiesList:
                     obj.removeProperty("GroupGaps")
 
-        self.changed = True
+    def CalculateModuleArray(self, obj, totalh, totalw, moduleh, modulew):
+        module = Part.makeBox(modulew, moduleh, obj.ModuleThick.Value)
+        compound = Part.makeCompound([])
+        offsetx = -totalw / 2
+        offsety = -totalh / 2
+        offsetz = obj.MainBeamHeight.Value + obj.BeamHeight.Value
+
+        if obj.ModuleViews:
+            mid = int(obj.ModuleColumns.Value / 2)
+            for row in range(int(obj.ModuleRows.Value)):
+                for col in range(int(obj.ModuleColumns.Value)):
+                    xx = offsetx + (modulew + obj.ModuleColGap.Value) * col
+                    if col >= mid:
+                        xx += obj.MotorGap.Value - obj.ModuleColGap.Value
+                    yy = offsety + (moduleh + obj.ModuleRowGap.Value) * row
+                    zz = offsetz
+                    moduleCopy = module.copy()
+                    moduleCopy.Placement.Base = FreeCAD.Vector(xx, yy, zz)
+                    compound.add(moduleCopy)
+        else:
+            totalArea = Part.makePlane(totalw, totalh)
+            totalArea.Placement.Base = FreeCAD.Vector(offsetx, offsety, offsetz)
+            compound.add(totalArea)
+        return compound
+
+    def calculateBeams(self, obj, totalh, totalw, moduleh, modulew):
+        ''' make mainbeam and modules beams '''
+        compound = Part.makeCompound([])
+        mainbeam = Part.makeBox(totalw + obj.ModuleOffsetX.Value * 2,
+                                obj.MainBeamWidth.Value,
+                                obj.MainBeamHeight.Value)
+        # details --------------------------------------------------------------------------------------------
         '''
-        if prop in ['BeamHeight', 'BeamOffset', 'BeamSpacing', 'BeamWidth', 'MainBeamAxisPosition', 'MainBeamHeight', 'MainBeamWidth',
-                    'ModuleColGap', 'ModuleCols', 'ModuleHeight', 'ModuleOffsetX', 'ModuleOffsetY', 'ModuleOrientation',
-                    'ModuleRowGap', 'ModuleRows', 'ModuleThick', 'ModuleViews', 'ModuleWidth', 'MotorGap',
-                    'AerialPole', 'DistancePole',
-                    'NumberPole', 'PoleHeight', 'PoleLength', 'PoleWidth', 'ShowBeams']:
+        edg = []
+        max_length = max([edge.Length for edge in mainbeam.Edges])
+        for edge in mainbeam.Edges:
+            if edge.Length == max_length:
+                edg.append(edge)
+        mainbeam = mainbeam.makeFillet(6, edg)
+        tmp = Part.makeBox((totalw + obj.ModuleOffsetX.Value * 2) * 2, obj.MainBeamWidth.Value, obj.MainBeamHeight.Value)
+        tmp.Placement.Base.x -= tmp.BoundBox.XLength / 4
+        edg = []
+        max_length = max([edge.Length for edge in tmp.Edges])
+        for edge in tmp.Edges:
+            if edge.Length == max_length:
+                edg.append(edge)
+        tmp = tmp.makeFillet(6, edg)
+        tmp = tmp.makeOffsetShape(-3, 0.1)
+        mainbeam = mainbeam.cut(tmp)
+        '''
+        # end details ----------------------------------------------------------------------------------------
+        mainbeam.Placement.Base.x = -totalw / 2 - obj.ModuleOffsetX.Value
+        mainbeam.Placement.Base.y = -obj.MainBeamWidth.Value / 2
+        compound.add(mainbeam)
 
-            self.changed = True
+        # Correa profile:
+        if obj.ShowBeams:  # TODO: make it in another function
+            mid = int(obj.ModuleColumns.Value / 2)
 
+            up = 27.8  # todo
+            thi = 3.2  # todo
+
+            p1 = FreeCAD.Vector(obj.BeamWidth.Value / 2 - up, 0, thi)
+            p2 = FreeCAD.Vector(p1.x, 0, obj.BeamHeight.Value)
+            p3 = FreeCAD.Vector(obj.BeamWidth.Value / 2, 0, p2.z)
+            p4 = FreeCAD.Vector(p3.x, 0, obj.BeamHeight.Value - thi)
+            p5 = FreeCAD.Vector(p4.x - up + thi, 0, p4.z)
+            p6 = FreeCAD.Vector(p5.x, 0, 0)
+
+            p7 = FreeCAD.Vector(-p6.x, 0, p6.z)
+            p8 = FreeCAD.Vector(-p5.x, 0, p5.z)
+            p9 = FreeCAD.Vector(-p4.x, 0, p4.z)
+            p10 = FreeCAD.Vector(-p3.x, 0, p3.z)
+            p11 = FreeCAD.Vector(-p2.x, 0, p2.z)
+            p12 = FreeCAD.Vector(-p1.x, 0, p1.z)
+
+            p = Part.makePolygon([p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p1])
+            p = Part.Face(p)
+            profile = p.extrude(FreeCAD.Vector(0, 428, 0))
+
+            for col in range(int(obj.ModuleColumns.Value)):
+                xx = totalArea.Placement.Base.x + (modulew + obj.ModuleColGap.Value) * col
+                if col >= mid:
+                    xx += float(obj.MotorGap.Value) - obj.ModuleColGap.Value
+                correaCopy = profile.copy()
+                correaCopy.Placement.Base.x = xx
+                correaCopy.Placement.Base.y = -428 / 2
+                correaCopy.Placement.Base.z = obj.MainBeamHeight.Value
+                self.ListModules.append(correaCopy)
+                compound.add(correaCopy)
+
+        return compound
+
+    def CalculatePosts(self, obj, totalh, totalw):
+        def getarray(array, numberofpoles):
+            if len(array) == 0:
+                newarray = [0] * numberofpoles
+                return newarray
+            elif len(array) == 1:
+                newarray = [array[0]] * numberofpoles
+                return newarray
+            elif len(array) == 2:
+                newarray = [array[0]] * numberofpoles
+                half = int(numberofpoles / 2)
+                newarray[half] = array[1]
+                if numberofpoles % 2 == 0:
+                    newarray[half - 1] = array[1]
+                return newarray
+            elif len(array) == 3:
+                half = int(numberofpoles/2)
+                newarray = [array[0]] * half + [array[1]] + [array[2]] * half
+                if numberofpoles % 2 == 0:
+                    newarray[half] = array[1]
+                return newarray
+            elif len(array) == numberofpoles:
+                return array
+            elif len(array) > numberofpoles:
+                return array[0 : numberofpoles]
+            else:
+                newarray = [array[0]] * numberofpoles
+                return newarray
+
+        #TODO: cambiar posttmp
+        posttmp = Part.makeBox(obj.PoleWidth.Value, obj.PoleHeight.Value, obj.PoleLength.Value)
+        linetmp = Part.LineSegment(FreeCAD.Vector(0), FreeCAD.Vector(0, obj.PoleHeight.Value / 2, 0)).toShape()
+        compoundPoles = Part.makeCompound([])
+        compoundAxis = Part.makeCompound([])
+
+        offsetX = - totalw / 2
+        offsetY = -obj.PoleHeight.Value / 2
+        arrayDistance = getarray(obj.DistancePole, int(obj.NumberPole.Value))
+        arrayAerial = getarray(obj.AerialPole, int(obj.NumberPole.Value))
+
+        for x in range(int(obj.NumberPole.Value)):
+            offsetX += arrayDistance[x] - obj.PoleWidth.Value / 2
+            postCopy = posttmp.copy()
+            postCopy.Placement.Base = FreeCAD.Vector(offsetX, offsetY, -(obj.PoleLength.Value - arrayAerial[x]))
+            compoundPoles.add(postCopy)
+            axis = linetmp.copy()
+            axis.Placement.Base = FreeCAD.Vector(offsetX + obj.PoleWidth.Value / 2, offsetY, arrayAerial[x])
+            compoundAxis.add(axis)
+
+        return compoundPoles, compoundAxis
+
+    def execute(self, obj):
+        # obj.Shape: compound
+        # |- Modules and Beams: compound
+        # |-- Modules array: compound
+        # |--- Modules: solid
+        # |-- Beams: compound
+        # |--- MainBeam: solid
+        # |--- Secundary Beams: solid (if exist)
+        # |- Poles array: compound
+        # |-- Poles: solid
+        # |-- Axis: Edge/line (if exist)
+
+        if obj.ModuleOrientation == "Portrait":
+            w = obj.ModuleWidth.Value
+            h = obj.ModuleHeight.Value
+        else:
+            h = obj.ModuleWidth.Value
+            w = obj.ModuleHeight.Value
+
+        totalh = h * obj.ModuleRows + obj.ModuleRowGap.Value * (obj.ModuleRows - 1)
+        totalw = w * obj.ModuleColumns + obj.ModuleColGap.Value * (obj.ModuleColumns - 1) + \
+                 (obj.MotorGap.Value - obj.ModuleColGap.Value) if obj.MotorGap.Value > 0 else 0
+
+        modules = self.CalculateModuleArray(obj, totalh, totalw, h, w)
+        beams = self.calculateBeams(obj, totalh, totalw, h, w)
+        poles, poleaxis = self.CalculatePosts(obj, totalh, totalw)
+        compound = Part.makeCompound([modules, beams])
+        compound.Placement.Base.z = obj.MainBeamAxisPosition.Value - (obj.MainBeamHeight.Value / 2)
+        obj.Shape = Part.makeCompound([compound, Part.makeCompound([poles, poleaxis])])
+        obj.Width = min(obj.Shape.BoundBox.XLength, obj.Shape.BoundBox.YLength)
+        obj.Length = max(obj.Shape.BoundBox.XLength, obj.Shape.BoundBox.YLength)
+
+class ViewProviderTrackerSetup:
+    "A View Provider for the TrackerSetup object"
+
+    def __init__(self, obj):
+        '''Set this object to the proxy object of the actual view provider'''
+        obj.Proxy = self
+
+    def getIcon(self):
+        return str(os.path.join(DirIcons, "trackersetup.svg"))
+
+    def setEdit(self, vobj, mode):
+        """Method called when the document requests the object to enter edit mode.
+
+        Edit mode is entered when a user double clicks on an object in the tree
+        view, or when they use the menu option [Edit -> Toggle Edit Mode].
+
+        Just display the standard FRAME SETUP task panel.
+
+        Parameters
+        ----------
+        mode: int or str
+            The edit mode the document has requested. Set to 0 when requested via
+            a double click or [Edit -> Toggle Edit Mode].
+
+        Returns
+        -------
+        bool
+            If edit mode was entered.
+        """
+
+        if (mode == 0) and hasattr(self, "Object"):
+            taskd = _TrackerTaskPanel(self.Object)
+            taskd.obj = self.Object
+            FreeCADGui.Control.showDialog(taskd)
+            return True
+        return False
+
+def makeTracker(name = "Tracker", setup = None):
+    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Tracker")
+    obj.Label = name
+    Tracker(obj)
+    _ViewProviderTracker(obj.ViewObject)
+    FreeCAD.ActiveDocument.recompute()
+
+    if setup is not None:
+        obj.Setup = setup
+    try:
+        site = PVPlantSite.get()
+        frame_list = site.Frames
+        frame_list.append(obj)
+        site.Frames = frame_list
+    except:
+        pass
+    return obj
+
+class Tracker(ArchComponent.Component):
+    "A 1 Axis Tracker Obcject"
+
+    def __init__(self, obj):
+        # Definición de Variables:
+        ArchComponent.Component.__init__(self, obj)
+        self.setProperties(obj)
+
+    def setProperties(self, obj):
+        pl = obj.PropertiesList
+
+        if not "Setup" in pl:
+            obj.addProperty("App::PropertyLink",
+                            "Setup",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            )
+
+        if not "Tilt" in pl:
+            obj.addProperty("App::PropertyAngle",
+                            "Tilt",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).Tilt = 0
+
+        self.Type = "1 Axis Tracker"
+        obj.Proxy = self
+        self.oldTilt = 0
+
+    def onDocumentRestored(self, obj):
+        ArchComponent.Component.onDocumentRestored(self, obj)
+        self.setProperties(obj)
+
+    def onBeforeChange(self, obj, prop):
+        ''' '''
+
+        if prop == "Tilt":
+            self.oldTilt = obj.Tilt
+
+    def onChanged(self, obj, prop):
+        '''Do something when a property has changed'''
+
+        if prop == "Setup":
+            if obj.Setup is None:
+                obj.Shape = Part.Shape() #TODO: ver si se puede borrar el contenido del shape
+            else:
+                pl = obj.Placement
+                obj.Shape = obj.Setup.Shape.copy()
+                obj.Placement = pl
+
+        '''if prop == "Placement":
+            angle = obj.Placement.Rotation.toEuler()[1]
+            newpoles = Part.makeCompound([])
+            for i in range(len(obj.Shape.SubShapes[1].SubShapes[0].SubShapes)):
+                pole = obj.Shape.SubShapes[1].SubShapes[0].SubShapes[i]
+                axis = obj.Shape.SubShapes[1].SubShapes[1].SubShapes[i]
+                base = axis.Vertexes[0].Point
+                vec = axis.Vertexes[1].Point - axis.Vertexes[0].Point
+                newpoles.add(pole.rotate(base, vec, -angle))
+            poles = Part.makeCompound([newpoles, obj.Shape.SubShapes[1].SubShapes[1].copy()])
+            obj.Shape = Part.makeCompound([obj.Shape.SubShapes[0].copy(), poles])'''
+
+        if prop == "Tilt":
+            shape = obj.Shape.copy()
+            p1 = shape.SubShapes[0].SubShapes[1].SubShapes[0].CenterOfMass
+            p2 = min(shape.SubShapes[0].SubShapes[1].SubShapes[0].Faces, key=lambda face: face.Area).CenterOfMass
+            axis = p1 - p2
+            face = max(obj.Shape.SubShapes[0].SubShapes[0].SubShapes[0].Faces, key=lambda face: face.Area)
+            g = face.CenterOfMass
+            normal = face.normalAt(*face.Surface.parameter(g))
+            radian = normal.getAngle(FreeCAD.Vector(0, 0, 1))
+            print(normal, " - ", math.degrees(radian))
+            obj.Shape = Part.makeCompound([shape.SubShapes[0].rotate(p1, axis, obj.Tilt.Value), shape.SubShapes[1]])
+    def execute(self, obj):
+        # obj.Shape: compound
+        # |- Modules and Beams: compound
+        # |-- Modules array: compound
+        # |--- Modules: solid
+        # |-- Beams: compound
+        # |--- MainBeam: solid
+        # |--- Secundary Beams: solid (if exist)
+        # |- Poles array: compound
+        # |-- Poles: solid
+        # |-- PoleAxes: Edge
+
+
+        '''if obj.Setup is None:
+            return
+
+        pl = obj.Placement
+        obj.Shape = obj.Setup.Shape.copy()
+        obj.Placement = pl'''
+
+        #obj.Width = min(obj.Shape.BoundBox.XLength, obj.Shape.BoundBox.YLength)
+        #obj.Length = max(obj.Shape.BoundBox.XLength, obj.Shape.BoundBox.YLength)
+
+class _Tracker(Frame): #old
+    "A 1 Axis Tracker Obcject"
+
+    def __init__(self, obj):
+        Frame.__init__(self, obj)
+
+        obj.ModuleCols = 45
+        obj.ModuleRows = 2
+        obj.ModuleColGap = 20
+        obj.ModuleRowGap = 20
+        obj.Tilt = 0
+
+    def setProperties(self, obj):
+        print("Tracker - setProperties")
+        Frame.setProperties(self, obj)
+        pl = obj.PropertiesList
+
+        # Array de modulos: -------------------------------------------------------------------------------------------
+        if not "MotorGap" in pl:
+            obj.addProperty("App::PropertyDistance",
+                            "MotorGap",
+                            "Module_array",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MotorGap = 550
+
+        if not "UseGroupsOfModules" in pl:
+            obj.addProperty("App::PropertyBool",
+                            "UseGroupsOfModules",
+                            "GroupsOfModules",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).UseGroupsOfModules = False
+
+        # Poles: ------------------------------------------------------------------------------------------------------
+        #TODO: cambiar todo esto por una lista de objetos??
+        if not "PoleHeight" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "PoleHeight",
+                            "Pole",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).PoleHeight = 160
+
+        if not "PoleWidth" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "PoleWidth",
+                            "Pole",
+                            QT_TRANSLATE_NOOP("App::Property", "The width of this object")
+                            ).PoleWidth = 80
+
+        if not "PoleLength" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "PoleLength",
+                            "Pole",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).PoleLength = 3000
+
+        # Array of Posts: ------------------------------------------------------------------------------------------------------
+        if not "NumberPole" in pl:
+            obj.addProperty("App::PropertyQuantity",
+                            "NumberPole",
+                            "Poles",
+                            "The total number of poles"
+                            ).NumberPole = 7
+
+        if not "DistancePole" in pl:
+            obj.addProperty("App::PropertyIntegerList",  # No list of Lenght so I use float list
+                            "DistancePole",
+                            "Poles",
+                            "Distance between poles starting from the left and from the first photovoltaic module "
+                            "without taking into account the offsets"
+                            ).DistancePole = [1500, 3000, 7000, 7000, 7000, 7000, 7000]
+
+        if not "AerialPole" in pl:
+            obj.addProperty("App::PropertyIntegerList",
+                            "AerialPole",
+                            "Poles",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).AerialPole = [1050]
+
+        if not "Poles" in pl:
+            obj.addProperty("App::PropertyLinkList",
+                            "Poles",
+                            "Poles",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            )
+
+        # Correas: ----------------------------------------------------------------------------------------------------
+        # 1. MainBeam: -------------------------------------------------------------------------------------------------
+        if not "MainBeamHeight" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "MainBeamHeight",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MainBeamHeight = 120
+
+        if not "MainBeamWidth" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "MainBeamWidth",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MainBeamWidth = 120
+
+        if not "MainBeamAxisPosition" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "MainBeamAxisPosition",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MainBeamAxisPosition = 1278
+        # 2. Costillas: ----------------------------------------------------------------------------------------------------
+        if not "ShowBeams" in pl:
+            obj.addProperty("App::PropertyBool",
+                            "ShowBeams",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).ShowBeams = False
+
+        if not "BeamHeight" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "BeamHeight",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).BeamHeight = 80
+
+        if not "BeamWidth" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "BeamWidth",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The width of this object")
+                            ).BeamWidth = 83.2
+
+        if not "BeamOffset" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "BeamOffset",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).BeamOffset = 50
+
+        if not "BeamSpacing" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "BeamSpacing",
+                            "Beam",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).BeamSpacing = 1000
+
+        # Tracker --------------------------------------------------------------------------------------------------------
+        if not "MaxPhi" in pl:
+            obj.addProperty("App::PropertyAngle",
+                            "MaxPhi",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MaxPhi = 60
+
+        if not "MinPhi" in pl:
+            obj.addProperty("App::PropertyAngle",
+                            "MinPhi",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MinPhi = -60
+
+        if not "MaxNegativeLengthwiseTilt" in pl:
+            obj.addProperty("App::PropertyAngle",
+                            "MaxNegativeLengthwiseTilt",
+                            "Frame",
+                            QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                            ).MaxNegativeLengthwiseTilt = 6
+
+        self.Type = "1 Axis Tracker"
+        obj.Proxy = self
+
+    def onDocumentRestored(self, obj):
+        ArchComponent.Component.onDocumentRestored(self, obj)
+        self.setProperties(obj)
+
+    def onChanged(self, obj, prop):
+        '''Do something when a property has changed'''
+
+        Frame.onChanged(self, obj, prop)
+
+        '''
+        ['Additions', 'AerialPole', 'Axis', 'Base', 'BeamHeight', 'BeamOffset', 'BeamSpacing', 'BeamWidth', 'CloneOf',
+        'Description', 'DistancePole', 'ExpressionEngine', 'HiRes', 'HorizontalArea', 'IfcData', 'IfcProperties', 
+        'IfcType', 'Label', 'Label2', 'Length', 'MainBeamAxisPosition', 'MainBeamHeight', 'MainBeamWidth', 'Material', 
+        'MaxLengthwiseTilt', 'MaxNegativeLengthwiseTilt', 'MaxPhi', 'MinPhi', 'ModuleColGap', 'ModuleCols', 
+        'ModuleHeight', 'ModuleOffsetX', 'ModuleOffsetY', 'ModuleOrientation', 'ModulePower', 'ModuleRowGap', 
+        'ModuleRows', 'ModuleThick', 'ModuleViews', 'ModuleWidth', 'MotorGap', 'MoveBase', 'MoveWithHost', 'NumberPole', 
+        'PerimeterLength', 'Placement', 'PoleCableLength', 'PoleHeight', 'PoleLength', 'PoleWidth', 'Proxy', 'Route', 
+        'RouteSection', 'Shape', 'ShowBeams', 'StandardCode', 'Subtractions', 'Tag', 'Tilt', 'TotalAreaShape', 
+        'UseGroupsOfModules', 'VerticalArea', 'Visibility', 'Width']
+        '''
+
+        if prop == "UseGroupsOfModules":
+            if obj.getPropertyByName(prop) == True:
+                if not "ColumnsPerGroup" in obj.PropertiesList:
+                    obj.addProperty("App::PropertyIntegerList",
+                                    "ColumnsPerGroup",
+                                    "GroupsOfModules",
+                                    QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                                    )
+
+                if not "GroupGaps" in obj.PropertiesList:
+                    obj.addProperty("App::PropertyIntegerList",
+                                    "GroupGaps",
+                                    "GroupsOfModules",
+                                    QT_TRANSLATE_NOOP("App::Property", "The height of this object")
+                                    )
+
+            else:
+                if "ColumnsPerGroup" in obj.PropertiesList:
+                    obj.removeProperty("ColumnsPerGroup")
+                if "GroupGaps" in obj.PropertiesList:
+                    obj.removeProperty("GroupGaps")
+
+        '''
         # Properties that rotate the Modules:
         if prop == "Tilt":
             if len(obj.Shape.SubShapes) == 0:
@@ -863,8 +1612,16 @@ class _Tracker(_Frame):
                 base = FreeCAD.Vector(center.x, center.y, pole.BoundBox.ZMax)
                 newpoles.add(pole.rotate(base, FreeCAD.Vector(0, 1, 0), -angle))
             obj.Shape = Part.makeCompound([obj.Shape.SubShapes[0], newpoles])
-        '''
+    '''
+        if prop in ['BeamHeight', 'BeamOffset', 'BeamSpacing', 'BeamWidth', 'MainBeamAxisPosition', 'MainBeamHeight',
+                    'MainBeamWidth',
+                    'ModuleColGap', 'ModuleCols', 'ModuleHeight', 'ModuleOffsetX', 'ModuleOffsetY', 'ModuleOrientation',
+                    'ModuleRowGap', 'ModuleRows', 'ModuleThick', 'ModuleViews', 'ModuleWidth', 'MotorGap',
+                    'AerialPole', 'DistancePole', 'NumberPole', 'PoleHeight', 'PoleLength', 'PoleWidth', 'ShowBeams']:
 
+            self.changed = True
+        else:
+            self.changed = False
     def CalculateModuleArray(self, obj, totalh, totalw, moduleh, modulew):
         module = Part.makeBox(modulew, moduleh, obj.ModuleThick.Value)
         compound = Part.makeCompound([])
@@ -1024,19 +1781,18 @@ class _Tracker(_Frame):
             compound.Placement.rotate(FreeCAD.Vector(0, 0, obj.BeamHeight.Value / 2),
                                       FreeCAD.Vector(1, 0, 0),
                                       obj.Tilt)
-
             compound.Placement.Base.z = obj.MainBeamAxisPosition.Value - (obj.MainBeamHeight.Value / 2)
             obj.Shape = Part.makeCompound([compound, poles])
             obj.Placement = pl
-            obj.Width = obj.Shape.BoundBox.XLength
-            obj.Length = obj.Shape.BoundBox.YLength
+            obj.Width = min(obj.Shape.BoundBox.XLength, obj.Shape.BoundBox.YLength)
+            obj.Length = max(obj.Shape.BoundBox.XLength, obj.Shape.BoundBox.YLength)
 
         angle = obj.Placement.Rotation.toEuler()[1]
-        if angle > obj.MaxLengthwiseTilt:
+        if (angle and angle > obj.MaxLengthwiseTilt) or \
+           (angle < 0 and abs(angle) > abs(obj.MaxNegativeLengthwiseTilt)):
             obj.ViewObject.ShapeColor = (1.0, 0.0, 0.0)
         else:
             obj.ViewObject.ShapeColor = (1.0, 1.0, 1.0)
-
 
 class _ViewProviderTracker(ArchComponent.ViewProviderComponent):
     "A View Provider for the Pipe object"
@@ -1049,10 +1805,8 @@ class _ViewProviderTracker(ArchComponent.ViewProviderComponent):
 
     def setEdit(self, vobj, mode):
         """Method called when the document requests the object to enter edit mode.
-
         Edit mode is entered when a user double clicks on an object in the tree
         view, or when they use the menu option [Edit -> Toggle Edit Mode].
-
         Just display the standard FRAME SETUP task panel.
 
         Parameters
@@ -1074,7 +1828,6 @@ class _ViewProviderTracker(ArchComponent.ViewProviderComponent):
             return True
 
         return False
-
 
 class _TrackerTaskPanel:
     def __init__(self, obj=None):
@@ -1202,6 +1955,30 @@ class _CommandFixedRack:
         FreeCADGui.Control.showDialog(self.TaskPanel)
         return
 
+class _CommandTrackerSetup:
+    "the Arch Building command definition"
+
+    def GetResources(self):
+        return {'Pixmap': str(os.path.join(DirIcons, "trackersetup.svg")),
+                'MenuText': QtCore.QT_TRANSLATE_NOOP("PVPlantTracker", "TrackerSetup"),
+                'Accel': "R, F",
+                'ToolTip': QtCore.QT_TRANSLATE_NOOP("PVPlanTracker",
+                                                    "Creates a TrackerSetup object from setup dialog.")}
+
+    def IsActive(self):
+        return not FreeCAD.ActiveDocument is None
+
+        if FreeCAD.ActiveDocument is not None:
+            if FreeCADGui.Selection.getCompleteSelection():
+                for ob in FreeCAD.ActiveDocument.Objects:
+                    if ob.Name[:4] == "Site":
+                        return True
+
+    def Activated(self):
+        obj = makeTrackerSetup()
+        self.TaskPanel = _FixedRackTaskPanel(obj)
+        FreeCADGui.Control.showDialog(self.TaskPanel)
+        return
 
 class _CommandTracker:
     "the Arch Building command definition"
@@ -1223,9 +2000,13 @@ class _CommandTracker:
                         return True
 
     def Activated(self):
-        obj = makeTracker()
-        self.TaskPanel = _FixedRackTaskPanel(obj)
-        FreeCADGui.Control.showDialog(self.TaskPanel)
+        sel = FreeCADGui.Selection.getSelection()
+        setupobj = None
+        for obj in sel:
+            if obj.Name[:12] == "TrackerSetup":
+                setupobj = obj
+                break
+        makeTracker(setup=setupobj)
         return
 
 class _CommandMultiRowTracker:
@@ -1257,6 +2038,7 @@ if FreeCAD.GuiUp:
 
         def GetCommands(self):
             return tuple(['PVPlantFixedRack',
+                          'PVPlantTrackerSetup',
                           'PVPlantTracker'
                           ])
 
@@ -1270,6 +2052,7 @@ if FreeCAD.GuiUp:
 
 
     FreeCADGui.addCommand('PVPlantFixedRack', _CommandFixedRack())
+    FreeCADGui.addCommand('PVPlantTrackerSetup', _CommandTrackerSetup())
     FreeCADGui.addCommand('PVPlantTracker', _CommandTracker())
     FreeCADGui.addCommand('Multirow', _CommandMultiRowTracker())
     FreeCADGui.addCommand('RackType', CommandRackGroup())

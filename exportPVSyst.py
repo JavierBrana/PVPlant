@@ -508,7 +508,6 @@ def exportToPVC(path, exportTerrain = False):
     for type in frameType:
         isTracker = "tracker" in type.Proxy.Type.lower()
         objectlist = FreeCAD.ActiveDocument.findObjects(Name="Tracker")
-
         for obj in objectlist:
             if obj.CloneOf == type:
                 findex = numpy.array([])
@@ -751,7 +750,9 @@ class _PVSystTaskPanel:
         self.form.show()
 
     def accept(self):
-        path = os.path.dirname(FreeCAD.ActiveDocument.FileName)
+        path = os.path.join(os.path.dirname(FreeCAD.ActiveDocument.FileName), "outputs", "PVSyst")
+        if not os.path.exists(path):
+            os.path.makedirs(path)
         filename = os.path.join(path, FreeCAD.ActiveDocument.Name)
 
         #if self.form.cbDAE.isChecked():

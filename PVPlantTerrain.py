@@ -50,6 +50,74 @@ DirIcons = os.path.join(DirResources, "Icons")
 DirImages = os.path.join(DirResources, "Images")
 
 
+
+#----------------------------------------------------------------------------------------------
+#from PySide.QtWidgets import QVBoxLayout, QLabel, QPushButton, QWidget, QMainWindow, QApplication
+from PySide.QtCore import QTimer, QRunnable, Slot, Signal, QObject, QThreadPool
+
+import sys
+import time
+import traceback
+
+
+class WorkerSignals(QObject):
+    '''
+    Defines the signals available from a running worker thread.
+    Supported signals are:
+    - finished: No data
+    - error: tuple (exctype, value, traceback.format_exc() )
+    - result: object data returned from processing, anything
+    - progress: int indicating % progress
+
+    '''
+    finished = Signal()
+    error = Signal(tuple)
+    result = Signal(object)
+    progress = Signal(int)
+
+class Worker(QRunnable):
+    '''
+    Worker thread
+    Inherits from QRunnable to handler worker thread setup, signals and wrap-up.
+    - param callback: The function callback to run on this worker thread. Supplied args and
+                      kwargs will be passed through to the runner.
+    - type callback: function
+    - param args: Arguments to pass to the callback function
+    - param kwargs: Keywords to pass to the callback function
+    '''
+
+    def __init__(self, fn, *args, **kwargs):
+        super(Worker, self).__init__()
+
+        # Store constructor arguments (re-used for processing)
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+
+        # Add the callback to our kwargs
+        self.kwargs['progress_callback'] = self.signals.progress
+
+    @Slot()
+    def run(self):
+        '''
+        Initialise the runner function with passed args, kwargs.
+        '''
+
+        # Retrieve args/kwargs here; and fire processing using them
+        try:
+            result = self.fn(*self.args)
+            print(result)
+        except:
+            traceback.print_exc()
+            exctype, value = sys.exc_info()[:2]
+            self.signals.error.emit((exctype, value, traceback.format_exc()))
+        else:
+            self.signals.result.emit(result)  # Return the result of the processing
+        finally:
+            self.signals.finished.emit()  # Done
+#--------------------------------------------------------------------------------------------
+
 def makeTerrain(name="Terrain"):
     obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Terrain")
     obj.Label = name
@@ -57,7 +125,6 @@ def makeTerrain(name="Terrain"):
     _ViewProviderTerrain(obj.ViewObject)
     FreeCAD.ActiveDocument.recompute()
     return obj
-
 
 class _Terrain(ArchComponent.Component):
     "A Shadow Terrain Obcject"
@@ -165,16 +232,25 @@ class _Terrain(ArchComponent.Component):
                             "CuttingBoundary",
                             "Surface",
                             "A boundary line to delimit the surface")
+
         if not "DEM" in pl:
             obj.addProperty("App::PropertyFile",
                             "DEM",
                             "Surface",
                             "Load a ASC file to generate the surface")
+
         if not "PointsGroup" in pl:
             obj.addProperty("App::PropertyLink",
                             "PointsGroup",
                             "Surface",
                             "Use a Point Group to generate the surface")
+
+        if not "Mesh" in pl:
+            obj.addProperty("Mesh::PropertyMeshKernel",
+                            "Mesh",
+                            "Surface",
+                            "Mesh")
+        obj.setEditorMode("Mesh", 1)
 
         '''
         #obj.setEditorMode("Volume", 1)
@@ -189,6 +265,10 @@ class _Terrain(ArchComponent.Component):
                             "Areas",
                             "A boundary to delimitated the terrain").ProhibitedAreas = []
         '''
+
+    def onDocumentRestored(self, obj):
+        ArchComponent.Component.onDocumentRestored(self, obj)
+        self.setProperties(obj)
 
     def __getstate__(self):
         return self.Type
@@ -211,6 +291,7 @@ class _Terrain(ArchComponent.Component):
         '''
 
         if prop == "DEM" or prop == "CuttingBoundary":
+            from datetime import datetime
             if obj.DEM and obj.CuttingBoundary:
                 grid_space = 1
                 file = open(obj.DEM, "r")
@@ -266,25 +347,6 @@ class _Terrain(ArchComponent.Component):
 
                 # Create mesh - surface:
                 if True:  # faster but more memory 46s - 4,25 gb
-                    '''
-                    x, y = np.meshgrid(x,2w)
-                    xx = x.flatten()
-                    yy = y.flatten()
-                    zz = datavals.flatten()
-                    x[:] = 0
-                    y[:] = 0
-                    datavals[:] = 0
-
-                    pts = []
-                    for i in range(0, len(xx)):
-                        if datavals[j][i] != nodata_value:
-                            pts.append([xx[i] * 1000, yy[i] * 1000, zz[i] * 1000])
-                    print(pts)
-
-                    xx[:] = 0
-                    yy[:] = 0
-                    zz[:] = 0
-                    '''
                     import PVPlantCreateTerrainMesh
                     v=1
                     if v == 0:
@@ -322,18 +384,44 @@ class _Terrain(ArchComponent.Component):
                         if len(rows[-1]) in [0,1]:
                             rows.pop()
 
+                        import Mesh
+                        m1 = Mesh.Mesh()
+
+                        def domesh(m):
+                            m1.addMesh(m.copy())
+                            obj.Mesh = m1
+
+                        starttime = datetime.now()
+                        for points in rows:
+                            worker = Worker(PVPlantCreateTerrainMesh.Triangulate, (np.array(points)))  # Any other args, kwargs are passed to the run function
+                            #worker.signals.result.connect(self.print_output)
+                            #worker.signals.finished.connect(self.thread_complete)
+                            #worker.signals.progress.connect(self.progress_fn)
+                            self.threadpool = QThreadPool()
+                            self.threadpool.start(worker)
+
+                        #Mesh.show(m1)
+                        total_time = datetime.now() - starttime
+                        print(" -- qt thread: ", total_time)
+
+                        ''' sin thread:
+                        starttime = datetime.now()
                         def makeTriangulation(points):
                             return PVPlantCreateTerrainMesh.Triangulate(np.array(points))
-
                         from multiprocessing import cpu_count
                         from multiprocessing.pool import ThreadPool
                         results = ThreadPool(cpu_count() - 1).imap_unordered(makeTriangulation, rows)
-
-                        import Mesh
-                        tmp = []
+                        #tmp=[]
+                        m2 = Mesh.Mesh()
                         for result in results:
-                            Mesh.show(result)
-                            tmp.append(result)
+                            #Mesh.show(result)
+                            #tmp.append(result)
+                            m2.addMesh(result.copy())
+                        Mesh.show(m2)
+
+                        total_time = datetime.now() - starttime
+                        print(" -- thread: ", total_time)
+                        '''
 
                         #sh = Part.Shape()
                         #sh.makeShapeFromMesh(mesh.Topology, 0.1)
@@ -354,7 +442,6 @@ class _Terrain(ArchComponent.Component):
                             #lines.append(Part.makePolygon(pts))
                     sh = Part.makeLoft(lines, False, True, False)
                     obj.Shape = sh
-
                 del x, y, datavals
 
         if prop == "PointsGroup" or prop == "CuttingBoundary":

@@ -1,5 +1,6 @@
 import FreeCAD
 import Part
+import math
 
 if FreeCAD.GuiUp:
     import FreeCADGui, os
@@ -287,8 +288,78 @@ def alpha_shape(points, alpha):
     triangles = list(polygonize(m))
     return cascaded_union(triangles), edge_points
 
+def groupingFrames(frames, tolerance = 1000):
+    if len(frames) == 0:
+        return None
+
+    xx = []
+    found = False
+    for obj in frames:
+        for x in xx:
+            if abs(obj.Placement.Base.x - x) <= tolerance:
+                found = True
+                break
+        if not found:
+            xx.append(obj.Placement.Base.x)
+        else:
+            found = False
+    xx = sorted(xx)
 
 
+    group = frames.copy()
+    rows = []
+    while len(group) > 0:
+        y = max(group, key=lambda x: x.Placement.Base.y).Placement.Base.y
+        row = []
+        for obj in group:
+            if abs(obj.Placement.Base.y - y) <= tolerance:
+                row.append(obj)
+        for obj in row:
+            group.remove(obj)
+        row = sorted(row, key=lambda x: x.Placement.Base.x)
+        rows.append(row)
+    return rows
 
+def matrixOfObjects(objects, xdist = 5000, ydist = 4000, tolerance = 1000):
+    xs = sorted([int(obj.Placement.Base.x) for obj in objects])
+    xs = list(dict.fromkeys(xs))
+    ys = sorted([int(obj.Placement.Base.y) for obj in objects], reverse=True)
+    ys = list(dict.fromkeys(ys))
+    #TODO: agrupor filas/columnas muy cercanas
+    matr = list()
+    for y in range(len(ys)):
+        matr.append([None] * len(xs))
+    for obj in objects:
+        x = xs.index(int(obj.Placement.Base.x))
+        y = ys.index(int(obj.Placement.Base.y))
+        matr[y][x] = obj
 
+    # TODO: grouping
+    dist = list()
+    ind = 0
+    for i in range(len(ys) - 1):
+        dist.append(abs(ys[i + 1] - ys[i]))
+    import statistics
+    mode = statistics.mode(dist)
+    print(dist)
+    print(mode)
+    return matr
 
+def angleToPercent(deg):
+    ''' ángulo en porcentaje = tan(ángulo en grados) * 100% '''
+    return math.tan(math.radians(deg)) * 100
+
+def PercentToAngle(percent):
+    ''' ángulo en grados = arctan(ángulo en porcentaje / 100%) '''
+    return math.degrees(math.atan(percent / 100))
+
+def getEWAngle(frame1, frame2):
+    vec = frame2.Placement.Base.sub(frame1.Placement.Base)
+    rad = vec.getAngle(FreeCAD.Vector(1, 0, 0))
+    deg = math.degrees(rad)
+    if deg > 90:
+        deg = 180 - deg
+    return deg
+
+def checkFrames():
+    ''' '''

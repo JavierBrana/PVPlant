@@ -259,8 +259,6 @@ class _ViewProviderForbiddenArea:
 
 
 ''' PV Area: '''
-
-
 def makePVArea():
     obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "PVArea")
     _PVArea(obj)
@@ -403,7 +401,6 @@ class _PVArea(_Area):
         ''''''
         _Area.execute(self, obj)
 
-
 class _ViewProviderPVArea:
     def __init__(self, vobj):
         '''
@@ -476,9 +473,154 @@ class _ViewProviderPVArea:
         return None
 
 
-# Comando: -----------------------------------------------------------------------------------------------------------
+''' offsets '''
+def makeOffset(base = None):
+    obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "Offset")
+    Offset(obj)
+    obj.Base = base
+    ViewProviderOffset(obj.ViewObject)
 
-class _CommandBoundary:
+    offsets = None
+    try:
+        offsetsgroup = FreeCAD.ActiveDocument.Offsets
+    except:
+        offsetsgroup = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup", 'Offsets')
+        offsetsgroup.Label = "Offsets"
+    offsetsgroup.addObject(obj)
+
+    return obj
+
+class Offset(_Area):
+
+    def __init__(self, obj):
+        _Area.__init__(self, obj)
+        self.setCommonProperties(obj)
+        self.obj = obj
+
+    def setCommonProperties(self, obj):
+        pl = obj.PropertiesList
+
+        if not ("Base" in pl):
+            obj.addProperty("App::PropertyLink",
+                            "Base",
+                            "Component",
+                            "Base wire"
+                            ).Base = None
+
+        if not ("Distance" in pl):
+            obj.addProperty("App::PropertyDistance",
+                            "Distance",
+                            "Component",
+                            "Base wire"
+                            ).Distance = -8000
+
+        self.Type = "Offset"
+        obj.Proxy = self
+
+    def onDocumentRestored(self, obj):
+        """Method run when the document is restored."""
+        self.setCommonProperties(obj)
+
+    def onChanged(self, obj, prop):
+        '''Do something when a property has changed'''
+
+    def execute(self, obj):
+        import draftgeoutils
+        import Utils.PVPlantUtils as utils
+        import PVPlantSite
+        import MeshPart as mp
+
+        wire = obj.Base.Shape
+        if wire is None:
+            return
+        land = PVPlantSite.get().Terrain.Mesh
+
+        pts = utils.getPointsFromVertexes(wire.Vertexes)
+        if wire.BoundBox.ZMin != wire.BoundBox.ZMin:
+            for point in pts:
+                point.z = 0
+        new_wire = Part.makePolygon(pts)
+        # offset (shape.makeOffset2D(offset, join, fill, mode == 0, inter))
+        new_wire = new_wire.makeOffset2D(obj.Distance.Value, 1, False, True, True) #draftgeoutils.wires.isReallyClosed(wire)
+        tmp = mp.projectShapeOnMesh(new_wire, land, FreeCAD.Vector(0, 0, 1))
+        pts = []
+        for section in tmp:
+            if len(section) > 0:
+                pts.extend(section)
+        obj.Shape = Part.makePolygon(pts)
+
+class ViewProviderOffset:
+    def __init__(self, vobj):
+        '''
+        Set view properties.
+        '''
+        self.Object = vobj.Object
+        vobj.Proxy = self
+
+    def attach(self, vobj):
+        '''
+        Create Object visuals in 3D view.
+        '''
+        self.Object = vobj.Object
+        return
+
+    def getIcon(self):
+        '''
+        Return object treeview icon.
+        '''
+
+        return str(os.path.join(DirIcons, "offset.svg"))
+
+    def claimChildren(self):
+        """
+        Provides object grouping
+        """
+        return [self.Object.Base, ]
+
+    def setEdit(self, vobj, mode=0):
+        """
+        Enable edit
+        """
+        return True
+
+    def unsetEdit(self, vobj, mode=0):
+        """
+        Disable edit
+        """
+        return False
+
+    def doubleClicked(self, vobj):
+        """
+        Detect double click
+        """
+        pass
+
+    def setupContextMenu(self, obj, menu):
+        """
+        Context menu construction
+        """
+        pass
+
+    def edit(self):
+        """
+        Edit callback
+        """
+        pass
+
+    def __getstate__(self):
+        """
+        Save variables to file.
+        """
+        return None
+
+    def __setstate__(self,state):
+        """
+        Get variables from file.
+        """
+        return None
+
+# Comandos: -----------------------------------------------------------------------------------------------------------
+class CommandBoundary:
 
     def GetResources(self):
         return {'Pixmap': str(os.path.join(PVPlantResources.DirIcons, "area.svg")),
@@ -498,8 +640,7 @@ class _CommandBoundary:
         else:
             return False
 
-
-class _CommandProhibitedArea:
+class CommandProhibitedArea:
 
     def GetResources(self):
         return {'Pixmap': str(os.path.join(PVPlantResources.DirIcons, "area_forbidden.svg")),
@@ -525,8 +666,7 @@ class _CommandProhibitedArea:
         else:
             return False
 
-
-class _CommandPVArea:
+class CommandPVArea:
 
     def GetResources(self):
         return {'Pixmap': str(os.path.join(PVPlantResources.DirIcons, "way.svg")),
@@ -544,14 +684,34 @@ class _CommandPVArea:
         else:
             return False
 
+class CommandOffset:
+    def GetResources(self):
+        return {'Pixmap': str(os.path.join(PVPlantResources.DirIcons, "offset.svg")),
+                'Accel': "A, O",
+                'MenuText': "Offset",
+                'ToolTip': "Offset"}
+
+    def Activated(self):
+        sel = FreeCADGui.Selection.getSelection()
+        base = None
+        if sel:
+            base = sel[0]
+        obj = makeOffset(base)
+
+    def IsActive(self):
+        if FreeCAD.ActiveDocument:
+            return True
+        else:
+            return False
 
 if FreeCAD.GuiUp:
-    class CommandRackGroup:
+    class CommandAreaGroup:
 
         def GetCommands(self):
             return tuple(['Area',
                           'ForbiddenArea',
-                          'PVArea'
+                          'PVArea',
+                          'Offset'
                           ])
 
         def GetResources(self):
@@ -562,7 +722,8 @@ if FreeCAD.GuiUp:
         def IsActive(self):
             return not FreeCAD.ActiveDocument is None
 
-    FreeCADGui.addCommand('Area', _CommandBoundary())
-    FreeCADGui.addCommand('ForbiddenArea', _CommandProhibitedArea())
-    FreeCADGui.addCommand('PVArea', _CommandPVArea())
-    FreeCADGui.addCommand('PVPlantAreas', CommandRackGroup())
+    FreeCADGui.addCommand('Area', CommandBoundary())
+    FreeCADGui.addCommand('ForbiddenArea', CommandProhibitedArea())
+    FreeCADGui.addCommand('PVArea', CommandPVArea())
+    FreeCADGui.addCommand('Offset', CommandOffset())
+    FreeCADGui.addCommand('PVPlantAreas', CommandAreaGroup())

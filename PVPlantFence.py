@@ -39,8 +39,6 @@ else:
     # \cond
     def translate(ctxt, txt):
         return txt
-
-
     def QT_TRANSLATE_NOOP(ctxt, txt):
         return txt
     # \endcond
@@ -77,14 +75,11 @@ def makePVPlantFence(section, post, path):
         hide(path)
 
     FreeCAD.ActiveDocument.recompute()
-
     return obj
-
 
 def hide(obj):
     if hasattr(obj, 'ViewObject') and obj.ViewObject:
         obj.ViewObject.Visibility = False
-
 
 def getAngle(Line1, Line2):
     v1 = Line1.Vertexes[1].Point - Line1.Vertexes[0].Point
@@ -251,23 +246,22 @@ def calculatePlacementsOnPath(shapeRotation, pathwire, count, xlate, align):
         # which edge in path should contain this shape?
         # avoids problems with float math travel > ends[-1]
         iend = len(ends) - 1
-
         for j in range(0, len(ends)):
             if travel <= ends[j]:
                 iend = j
                 break
-
         # place shape at proper spot on proper edge
         remains = ends[iend] - travel
         offset = path[iend].Length - remains
         pt = path[iend].valueAt(get_parameter_from_v0(path[iend], offset))
-
-        placements.append(calculatePlacement(
-            shapeRotation, path[iend], offset, pt, xlate, align, normal))
-
+        placements.append(calculatePlacement(shapeRotation, path[iend], offset, pt, xlate, align, normal))
+        '''
+        if (i % 10) == 0:
+            pt = path[iend].valueAt(get_parameter_from_v0(path[iend], offset - 2000))
+            placements.append(calculatePlacement(FreeCAD.Rotation(-90, 0, 0), path[iend], offset, pt, xlate, align, normal))
+        '''
         travel += step
     return placements
-
 
 class _Fence(ArchComponent.Component):
     def __init__(self, obj):
@@ -325,6 +319,13 @@ class _Fence(ArchComponent.Component):
                             "MeshHeight",
                             "Fence",
                             QT_TRANSLATE_NOOP("App::Property", "A single fence post")).MeshHeight = 2000
+
+        if not "Reinforce" in pl:
+            obj.addProperty("App::PropertyLength",
+                            "Reinforce",
+                            "Fence",
+                            QT_TRANSLATE_NOOP("App::Property", "A single fence post")).Reinforce = 50000
+
 
         ########## Datos informativos:
         if not "NumberOfSections" in pl:
@@ -392,9 +393,12 @@ class _Fence(ArchComponent.Component):
         if True:  # prueba
             import MeshPart as mp
             land = FreeCAD.ActiveDocument.Mesh002.Mesh
-            pathwire = mp.projectShapeOnMesh(pathwire, land, FreeCAD.Vector(0, 0, 1))
-            print(len(pathwire))
-            #pathwire =
+            segments = mp.projectShapeOnMesh(pathwire, land, FreeCAD.Vector(0, 0, 1))
+            points=[]
+            for segment in segments:
+                points.extend(segment)
+            print(len(points),"\n",points)
+            pathwire = Part.makePolygon(points)
         else:
             if PVPlantSite.get().Terrain.TypeId == 'Mesh::Feature':
                 import MeshPart as mp

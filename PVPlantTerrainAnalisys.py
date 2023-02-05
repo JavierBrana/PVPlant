@@ -516,9 +516,7 @@ class _SlopeTaskPanel(_generalTaskPanel):
 
     def __init__(self):
         _generalTaskPanel.__init__(self)
-
         self.angles = self.getAngles()
-
         # Initial set-up:
         self.form.editFrom.setSuffix(" º")
         self.form.editFrom.setValue(0)
@@ -538,7 +536,6 @@ class _SlopeTaskPanel(_generalTaskPanel):
             angle = math.degrees(rad)
             angles.append(angle)
         return angles
-
 
     def getPointSlope(self, ranges = None):
         from datetime import datetime
@@ -566,7 +563,6 @@ class _SlopeTaskPanel(_generalTaskPanel):
         # TODO: check this code:
         elif obj.isDerivedFrom("Mesh::Feature"):
             fMesh = Mest2FemMesh(land)
-
             import math
             setColors = []
             i = 1

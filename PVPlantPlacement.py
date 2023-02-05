@@ -37,7 +37,6 @@ else:
     def translate(ctxt, txt):
         return txt
 
-
     def QT_TRANSLATE_NOOP(ctxt, txt):
         return txt
     # \endcond
@@ -312,8 +311,10 @@ class _PVPlantPlacementTaskPanel:
         ''' '''
 
     def createFrameFromPoints(self, placements, edges=None):
+        import PVPlantRack
         def createFrame(pl):
-            newrack = FreeCAD.ActiveDocument.copyObject(self.Rack)
+            #newrack = FreeCAD.ActiveDocument.copyObject(self.Rack)
+            newrack = PVPlantRack.makeTracker()
             newrack.Label = "Tracker"
             newrack.Placement = pl
             newrack.Visibility = True
@@ -374,139 +375,167 @@ class _PVPlantPlacementTaskPanel:
         return np.arange(startx, self.Area.BoundBox.XMax, self.gap_col), \
                np.arange(starty, self.Area.BoundBox.YMin, -self.gap_row)
 
-    def adjustToTerrain(self, cols, width):
+    def adjustToTerrain(self, coordinates, width):
         placements = list()
         dist = FreeCAD.Units.Quantity(self.form.editGapRows.text()).Value * 1.50
         vec1 = FreeCAD.Vector(self.Dir)
         vec1.Length = (width / 2)
         mode = 1
-        terrain = None
+        terrain = PVPlantSite.get().Terrain.Mesh
         type = 0
-        if True: # prueba
-            terrain = FreeCAD.ActiveDocument.Mesh005.Mesh
-        else:
-            if PVPlantSite.get().Terrain.TypeId == 'Mesh::Feature':
-                terrain = PVPlantSite.get().Terrain.Mesh
-            else:
-                terrain = PVPlantSite.get().Terrain.Shape
-                type = 1
 
-        for colnum, col in enumerate(cols):
-            groups = list()
-            groups.append([col[0]])
-            for i in range(1, len(col)):
-                group = groups[-1]
-                long = (col[i].sub(group[-1])).Length
-                long -= width
-                if long <= dist:
-                    group.append(col[i])
-                else:
-                    groups.append([col[i]])
-            for group in groups:
-                points = list()
-                points.append(group[0].sub(vec1))
-                for ind in range(0, len(group) - 1):
-                    points.append((group[ind].sub(vec1) + group[ind + 1].add(vec1)) / 2)
-                points.append(group[-1].add(vec1))
+        #01. Grouping:
+        from skimage import measure
+        arr = np.array(coordinates, dtype=object)
+        labeled_im = measure.label(arr != 0)
+        for region in measure.regionprops(labeled_im):
+            label = region['label']
+            cols, rows = np.where(labeled_im == label)
+            tmpC = cols[0]
+            tmpR = rows[0]
+            for ind in range(len(cols)):
+                print(coordinates[cols[ind]][rows[ind]])
 
-                points3D = list()
-                '''
-                # v0
-                for ind in range(len(points) - 1):
-                    line = Part.LineSegment(points[ind], points[ind + 1])
-                    tmp = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
-                    if len(tmp.Vertexes) > 0:
-                        if ind == 0:
-                            points3D.append(tmp.Vertexes[0].Point)
-                        points3D.append(tmp.Vertexes[-1].Point)
-                '''
-                # V1
-                if type == 0:   # Mesh:
-                    import MeshPart as mp
-                    for point in points:
-                        point3D = mp.projectPointsOnMesh([point, ], terrain, FreeCAD.Vector(0, 0, 1))
-                        if len(point3D) > 0:
-                            points3D.append(point3D[0])
-                else:           # Shape:
-                    line = Part.LineSegment(points[0], points[-1])
-                    tmp = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
-                    if len(tmp.Vertexes) > 0:
-                        tmppoints = [ver.Point for ver in tmp.Vertexes]
-                        if mode == 1:  # mode = normal
-                            for point in points:
-                                '''# OPTION 1:
-                                line = Part.Line(point, point + FreeCAD.Vector(0, 0, 10))
-                                for i in range(len(tmppoints) - 1):
-                                    seg = Part.LineSegment(tmppoints[i], tmppoints[i + 1])
-                                    inter = line.intersect(seg)
-                                    print(inter)
-                                    if len(inter) > 0:
-                                        points3D.append(FreeCAD.Vector(inter[0].X, inter[0].Y, inter[0].Z))
-                                '''
-                                # OPTION 2:
-                                plane = Part.Plane(point, self.Dir)
-                                for i in range(len(tmppoints) - 1):
-                                    seg = Part.LineSegment(tmppoints[i], tmppoints[i + 1])
-                                    inter = plane.intersect(seg)
-                                    if len(inter) > 0:
-                                        if len(inter[0]):
-                                            inter = inter[0]
+
+        '''properties = ['label', 'area']
+        table = measure.regionprops_table(labeled_im, properties=properties)
+        print (table)
+        import pandas as pd
+        table = pd.DataFrame(table)
+        print(table)'''
+
+        def placeonregion(frames):
+            for colnum, col in enumerate(frames):
+                print (col)
+                groups = list()
+                groups.append([col[0]])
+                for i in range(1, len(col)):
+                    group = groups[-1]
+                    long = (col[i].sub(group[-1])).Length
+                    long -= width
+                    if long <= dist:
+                        group.append(col[i])
+                    else:
+                        groups.append([col[i]])
+
+                for group in groups:
+                    points = list()
+                    points.append(group[0].sub(vec1))
+                    for ind in range(0, len(group) - 1):
+                        points.append((group[ind].sub(vec1) + group[ind + 1].add(vec1)) / 2)
+                    points.append(group[-1].add(vec1))
+
+                    points3D = list()
+                    '''
+                    # v0
+                    for ind in range(len(points) - 1):
+                        line = Part.LineSegment(points[ind], points[ind + 1])
+                        tmp = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
+                        if len(tmp.Vertexes) > 0:
+                            if ind == 0:
+                                points3D.append(tmp.Vertexes[0].Point)
+                            points3D.append(tmp.Vertexes[-1].Point)
+                    '''
+                    # V1
+                    if type == 0:   # Mesh:
+                        import MeshPart as mp
+                        for point in points:
+                            point3D = mp.projectPointsOnMesh([point, ], terrain, FreeCAD.Vector(0, 0, 1))
+                            if len(point3D) > 0:
+                                points3D.append(point3D[0])
+
+                    else:           # Shape:
+                        line = Part.LineSegment(points[0], points[-1])
+                        tmp = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
+                        if len(tmp.Vertexes) > 0:
+                            tmppoints = [ver.Point for ver in tmp.Vertexes]
+                            if mode == 1:  # mode = normal
+                                for point in points:
+                                    '''# OPTION 1:
+                                    line = Part.Line(point, point + FreeCAD.Vector(0, 0, 10))
+                                    for i in range(len(tmppoints) - 1):
+                                        seg = Part.LineSegment(tmppoints[i], tmppoints[i + 1])
+                                        inter = line.intersect(seg)
+                                        print(inter)
+                                        if len(inter) > 0:
                                             points3D.append(FreeCAD.Vector(inter[0].X, inter[0].Y, inter[0].Z))
-                                            break
-                        else:  # TODO: mode = Trend
-                            # TODO: check:
-                            from scipy import stats
-                            xx = list()
-                            yy = list()
-                            zz = list()
+                                    '''
+                                    # OPTION 2:
+                                    plane = Part.Plane(point, self.Dir)
+                                    for i in range(len(tmppoints) - 1):
+                                        seg = Part.LineSegment(tmppoints[i], tmppoints[i + 1])
+                                        inter = plane.intersect(seg)
+                                        if len(inter) > 0:
+                                            if len(inter[0]):
+                                                inter = inter[0]
+                                                points3D.append(FreeCAD.Vector(inter[0].X, inter[0].Y, inter[0].Z))
+                                                break
+                            else:  # TODO: mode = Trend
+                                # TODO: check:
+                                from scipy import stats
+                                xx = list()
+                                yy = list()
+                                zz = list()
 
-                            for pts in tmppoints:
-                                xx.append(pts.x)
-                                yy.append(pts.y)
-                                zz.append(pts.z)
+                                for pts in tmppoints:
+                                    xx.append(pts.x)
+                                    yy.append(pts.y)
+                                    zz.append(pts.z)
 
-                            slope, intercept, r, p, std_err = stats.linregress(yy, zz)
+                                slope, intercept, r, p, std_err = stats.linregress(yy, zz)
 
-                            def myfunc(x):
-                                return slope * x + intercept
+                                def myfunc(x):
+                                    return slope * x + intercept
 
-                            x = list()
-                            x.append(yy[0])
-                            x.append(yy[-1])
-                            newzz = list(map(myfunc, x))
-                            points3D.append(FreeCAD.Vector(xx[0], yy[0], newzz[0]))
-                            points3D.append(FreeCAD.Vector(xx[-1], yy[-1], newzz[1]))
-                '''
-                if len(points) != len(points3D):
-                    i = 0
-                    while i < len(points3D) - 1:
-                        vec = points3D[i + 1].sub(points3D[i])
-                        if (vec.x == 0) and (vec.y == 0):
-                            if vec.z >= 0:
-                                points3D.pop(i)
-                            else:
-                                points3D.pop(i + 1)
-                            continue
-                        i += 1
-                '''
-                '''
-                if len(points3D) > 0:
-                    line = PVPlantTrace.makeTrace(points3D, "LineCol" + str(colnum))
-                    line.ProjectionPoints = points
-                else:
-                    print(" Error: No 3d points: \n", points)
-                '''
+                                x = list()
+                                x.append(yy[0])
+                                x.append(yy[-1])
+                                newzz = list(map(myfunc, x))
+                                points3D.append(FreeCAD.Vector(xx[0], yy[0], newzz[0]))
+                                points3D.append(FreeCAD.Vector(xx[-1], yy[-1], newzz[1]))
+                    '''
+                    if len(points) != len(points3D):
+                        i = 0
+                        while i < len(points3D) - 1:
+                            vec = points3D[i + 1].sub(points3D[i])
+                            if (vec.x == 0) and (vec.y == 0):
+                                if vec.z >= 0:
+                                    points3D.pop(i)
+                                else:
+                                    points3D.pop(i + 1)
+                                continue
+                            i += 1
+                    '''
+                    '''
+                    if len(points3D) > 0:
+                        line = PVPlantTrace.makeTrace(points3D, "LineCol" + str(colnum))
+                        line.ProjectionPoints = points
+                    else:
+                        print(" Error: No 3d points: \n", points)
+                    '''
 
-                for ind in range(0, len(points3D) - 1):
-                    pl = FreeCAD.Placement()
-                    vec = points3D[ind] - points3D[ind + 1]
-                    pl.Base = FreeCAD.Vector(group[ind])
-                    p = (points3D[ind] + points3D[ind + 1]) / 2
-                    pl.Base.z = p.z
-                    rot = FreeCAD.Rotation(FreeCAD.Vector(-1, 0, 0), vec)
-                    pl.Rotation = FreeCAD.Rotation(rot.toEuler()[0], rot.toEuler()[1], 0)
-                    placements.append(pl)
-        return placements
+                    for ind in range(0, len(points3D) - 1):
+                        pl = FreeCAD.Placement()
+                        vec = points3D[ind] - points3D[ind + 1]
+                        pl.Base = FreeCAD.Vector(group[ind])
+                        p = (points3D[ind] + points3D[ind + 1]) / 2
+                        pl.Base.z = p.z
+                        rot = FreeCAD.Rotation(FreeCAD.Vector(-1, 0, 0), vec)
+                        pl.Rotation = FreeCAD.Rotation(rot.toEuler()[0], rot.toEuler()[1], 0)
+                        placements.append(pl)
+            return placements
+
+    def isInside(self, cp):
+        point = FreeCAD.Vector(x + yy_med + offsetcols, y - xx_med + offsetrows, 0.0)
+        # first filter
+        if self.Area.isInside(point, 10, True):
+            #cp = rec.copy()
+            cp.Placement.Base = point
+            cut = cp.cut([self.Area])
+            # second filter
+            if len(cut.Vertexes) == 0:
+                return True
+        return False
 
     def calculateAlignedArray(self):
         pointsx, pointsy = self.getAligments()
@@ -519,10 +548,8 @@ class _PVPlantPlacementTaskPanel:
                                 FreeCAD.Vector(xx_med, yy_med, 0),
                                 FreeCAD.Vector(-xx_med, yy_med, 0),
                                 FreeCAD.Vector(-xx_med, -yy_med, 0)])
-
         rec.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0),
                                                   FreeCAD.Vector(0, 1, 0))
-
         # variables for corridors:
         countcols = 0
         countrows = 0
@@ -540,13 +567,44 @@ class _PVPlantPlacementTaskPanel:
                 point = FreeCAD.Vector(x + yy_med + offsetcols, y - xx_med + offsetrows, 0.0)
                 # first filter
                 if self.Area.isInside(point, 10, True):
-                    cp = rec.copy()
-                    cp.Placement.Base = point
-                    cut = cp.cut([self.Area])
+                    rec.Placement.Base = point
+                    cut = rec.cut([self.Area])
                     # second filter
                     if len(cut.Vertexes) == 0:
                         pl.append(point)
                         col.append(point)
+                        Part.show(rec)
+                        continue
+                col.append(0)
+            cols.append(col)
+
+            if len(col) > 0:
+                # code for vertical corridors:
+                if self.form.groupCorridor.isChecked():
+                    if self.form.editColCount.value() > 0:
+                        countcols += 1
+                        if countcols == self.form.editColCount.value():
+                            offsetcols += valcols
+                            countcols = 0
+        ''' old:
+        pl = []
+        cols = []
+        cnt = 0
+        for x in pointsx:
+            col = []
+            for y in pointsy:
+                cnt += 1
+                point = FreeCAD.Vector(x + yy_med + offsetcols, y - xx_med + offsetrows, 0.0)
+                # first filter
+                if self.Area.isInside(point, 10, True):
+                    rec.Placement.Base = point
+                    cut = rec.cut([self.Area])
+                    # second filter
+                    if len(cut.Vertexes) == 0:
+                        pl.append(point)
+                        col.append(point)
+                        continue
+                #col.append(None)
 
             if len(col) > 0:
                 cols.append(col)
@@ -556,7 +614,7 @@ class _PVPlantPlacementTaskPanel:
                         countcols += 1
                         if countcols == self.form.editColCount.value():
                             offsetcols += valcols
-                            countcols = 0
+                            countcols = 0'''
 
         return self.adjustToTerrain(cols, xx)
 
@@ -668,6 +726,22 @@ class _PVPlantPlacementTaskPanel:
         FreeCADGui.Control.closeDialog()
         return True
 
+def algo(terrain, frames):
+    line = Part.LineSegment(begin, end).toShape()
+    pts = mp.projectShapeOnMesh(line, terrain, FreeCAD.Vector(0, 0, 1))
+
+def getMaxSlope(frames, relation):
+    xx = 0
+    separation = 0
+    yy = 0
+    for i in range(len(frames)):
+        xx += frames[i].length
+        if i > 0:
+            tmp = (frames[i].BoundBox.Center - frames[i-1].BoundBox.Center).Length - \
+                  (frames[i].length + frames[i-1].length) / 2
+            separation += tmp
+            yy += tmp * relation
+    return yy/xx
 
 # ----------------------------------------------------------------------------------------------------------------------
 # function AdjustToTerrain
@@ -676,41 +750,46 @@ class _PVPlantPlacementTaskPanel:
 #   Inputs:
 #   1. frames: group of objest to adjust
 # ----------------------------------------------------------------------------------------------------------------------
-def adjustToTerrain(frames, trend = True):
-    FreeCAD.ActiveDocument.openTransaction("Adjust to terrain")
+class adjustToTerrainTaskPanel:
+    def __init__(self, obj=None):
+        self.obj = obj
+
+        # -------------------------------------------------------------------------------------------------------------
+        # Module widget form
+        # -------------------------------------------------------------------------------------------------------------
+        self.form = FreeCADGui.PySideUic.loadUi(PVPlantResources.__dir__ + "/PVPlantPlacementAdjust.ui")
+
+    def accept(self):
+        FreeCADGui.Control.closeDialog()
+        adjustToTerrain(FreeCADGui.Selection.getSelection(), self.form.checkTrenck, self.form.editStepSize)
+        return True
+
+    def reject(self):
+        FreeCADGui.Control.closeDialog()
+        return True
+
+def adjustToTerrain(frames, trend = True, stepSize = 0):
     from datetime import datetime
     starttime = datetime.now()
 
     from scipy import stats
     import MeshPart as mp
 
-    #terrain = PVPlantSite.get().Terrain.Shape
+    FreeCAD.ActiveDocument.openTransaction("Adjust to terrain")
     terrain = None
     type = 0
-    if True:  # prueba
-        terrain = FreeCAD.ActiveDocument.Mesh002.Mesh
+    if hasattr(PVPlantSite.get().Terrain, "Mesh") and (PVPlantSite.get().Terrain.Mesh.Area>0):
+        terrain = PVPlantSite.get().Terrain.Mesh
     else:
-        if PVPlantSite.get().Terrain.TypeId == 'Mesh::Feature':
-            terrain = PVPlantSite.get().Terrain.Mesh
-        else:
-            terrain = PVPlantSite.get().Terrain.Shape
-            type = 1
+        terrain = PVPlantSite.get().Terrain.Shape
+        type = 1
 
     cols = getCols(frames)
-
-    '''
-    from multiprocessing import cpu_count
-    from multiprocessing.pool import ThreadPool
-    results = ThreadPool(cpu_count() - 1).imap_unordered(getCols, frames)
-    cols = []
-    for result in results:
-        # FreeCAD.Console.PrintWarning(result)
-        cols.append(result)
-    '''
     for col in cols:
         for group in col:
-            frame1 = group[0]  # Norte / Oeste
-            frame2 = group[-1]  # Sur / Este
+            # 1. Get lines/points to project on land
+            frame1 = group[0]  # Norte
+            frame2 = group[-1]  # Sur
             # TODO: revisar esta parte:
             p0 = FreeCAD.Vector(frame1.Shape.BoundBox.Center.x, frame1.Shape.BoundBox.YMax, 0)
             pf = FreeCAD.Vector(frame2.Shape.BoundBox.Center.x, frame2.Shape.BoundBox.YMin, 0)
@@ -734,11 +813,12 @@ def adjustToTerrain(frames, trend = True):
                 points.append(v)
             points.append(pf)
 
+            # 2. Get 3D points of the line:
             points3D = []
-            if type == 0:  # Mesh:
+            if type == 0:   # Mesh:
                 import MeshPart as mp
                 points3D = mp.projectPointsOnMesh(points, terrain, FreeCAD.Vector(0, 0, 1))
-            else:  # Shape:
+            else:           # Shape:
                 line = Part.LineSegment(points[0], points[-1])
                 tmp = terrain.makeParallelProjection(line.toShape(), FreeCAD.Vector(0, 0, 1))
                 if len(tmp.Vertexes) > 0:
@@ -753,7 +833,12 @@ def adjustToTerrain(frames, trend = True):
                                     inter = inter[0]
                                     points3D.append(FreeCAD.Vector(inter[0].X, inter[0].Y, inter[0].Z))
                                     break
+
+            # 3. Calculate trend:
+            points3Dtrend = []
             if trend:
+                def getNewZ(x):
+                    return slope * x + intercept
                 if type == 0:  # Mesh:
                     tmp_points3D = list()
                     for ind in range(0, len(points3D) - 1):
@@ -767,14 +852,14 @@ def adjustToTerrain(frames, trend = True):
                             yy.append(point.y)
                             zz.append(point.z)
                         slope, intercept, r, p, std_err = stats.linregress(yy, zz)
-                        def getNewZ(x):
-                            return slope * x + intercept
                         newzz = list(map(getNewZ, [yy[0], yy[-1]]))
                         if ind == 0:
                             tmp_points3D.append(FreeCAD.Vector(xx[0], yy[0], newzz[0]))
                         else:
                             tmp_points3D[ind] = (tmp_points3D[ind] + FreeCAD.Vector(xx[0], yy[0], newzz[0])) / 2
-                        tmp_points3D.append(FreeCAD.Vector(xx[-1], yy[-1], newzz[1]))
+                        tmp_points3D.append(FreeCAD.Vector(xx[-1], yy[-1], newzz[-1]))
+                        points3Dtrend.append((FreeCAD.Vector(xx[0], yy[0], newzz[0]),
+                                              FreeCAD.Vector(xx[-1], yy[-1], newzz[-1])))
                     points3D = tmp_points3D.copy()
 
             for ind in range(0, len(points3D) - 1):
@@ -787,7 +872,6 @@ def adjustToTerrain(frames, trend = True):
     total_time = datetime.now() - starttime
     print(" -- Tiempo tardado en ajustar al terreno:", total_time)
     FreeCAD.activeDocument().recompute()
-
 
 def getAxis(sel):
     site = FreeCAD.ActiveDocument.Site.Terrain.Shape
@@ -825,9 +909,7 @@ def AdjustToTerrain_V0(frames):
             p2 = list[-1]
             vec = p2 - p1
             angle = math.degrees(vec.getAngle(FreeCAD.Vector(0, 1, 0)))
-
             zz = ((p2 + p1) / 2).z
-
             if angle > 90:
                 angle = angle - 180
 
@@ -843,7 +925,6 @@ def AdjustToTerrain_V0(frames):
 def AdjustToTerrain_V1(frames):
     import MeshPart as mp
     import math
-
 
     terrain = PVPlantSite.get().Terrain.Mesh.copy()
     cols = getCols(frames)
@@ -905,7 +986,7 @@ def getCols(sel, tolerance=4000, sort = True):
             else:
                 newsel.append(obj1)
         sel = newsel.copy()
-        col = sorted(col, key=lambda k: k.Placement.Base.y, reverse=True)  # Orden Norte - Sur (Arriba a abajo)
+        col = sorted(col, key=lambda k: k.Placement.Base.y, reverse=True)  #Orden Norte - Sur (Arriba a abajo)
 
         # 2. Detectar y separar los grupos dentro de una misma columna:
         group = []
@@ -913,19 +994,21 @@ def getCols(sel, tolerance=4000, sort = True):
         group.append(col[0])
         if len(col) > 1:
             for ind in range(0, len(col) - 1):
-                vec1 = FreeCAD.Vector(col[ind + 1].Placement.Base)
+                vec1 = FreeCAD.Vector(col[ind].Placement.Base)
                 vec1.z = 0
-                vec2 = FreeCAD.Vector(col[ind].Placement.Base)
+                vec2 = FreeCAD.Vector(col[ind + 1].Placement.Base)
                 vec2.z = 0
-                distance = (vec1 - vec2).Length - (col[ind].Length.Value + col[ind + 1].Length.Value) / 2
+                distance = abs((vec1 - vec2).Length) - (col[ind].Width.Value + col[ind + 1].Width.Value) / 2
                 if distance > tolerance:
                     newcol.append(group.copy())
                     group.clear()
                 group.append(col[ind + 1])
         newcol.append(group)
         cols.append(newcol)
+
     if sort:
         cols = sorted(cols, key=lambda k: k[0][0].Placement.Base.x, reverse=False)
+
     return cols
 
 def getGroups(columns, tolerance = 4000):
@@ -934,6 +1017,7 @@ def getGroups(columns, tolerance = 4000):
         groups = getGroupsIncolumn(column, tolerance)
         newColumns.append(groups)
     return newColumns
+
     
 def getGroupsInColumn(column, tolerance = 4000):
     group = list()
@@ -1068,9 +1152,8 @@ class _CommandAdjustToTerrain:
     def Activated(self):
         sel = FreeCADGui.Selection.getSelection()
         if len(sel) > 0:
-            # AdjustToTerrain_V1(sel)
-            # AdjustToTerrain__(sel)
-            adjustToTerrain(sel)
+            #adjustToTerrain(sel)
+            FreeCADGui.Control.showDialog(adjustToTerrainTaskPanel())
         else:
             print("No selected object")
 

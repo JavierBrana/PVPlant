@@ -513,40 +513,12 @@ class _ImportPointsTaskPanel:
             if self.filename == "":
                 return
 
+            import Utils.importDEM as openDEM
             if self.select == 1: # DEM.
                 import numpy as np
                 root, extension = os.path.splitext(self.filename)
-
                 if extension.lower() == ".asc":
-                    grid_space = 1
-
-                    file = open(self.filename, "r")
-                    templist = [line.split() for line in file.readlines()]
-                    file.close()
-                    del file
-
-                    # Read meta data:
-                    meta = templist[0:6]
-                    nx = int(meta[0][1])                        # NCOLS
-                    ny = int(meta[1][1])                        # NROWS
-                    xllcorner = round(float(meta[2][1]), 3)     # XLLCENTER
-                    yllcorner = round(float(meta[3][1]), 3)     # YLLCENTER
-                    cellsize = round(float(meta[4][1]), 3)      # CELLSIZE
-                    nodata_value = float(meta[5][1])            # NODATA_VALUE
-
-                    # set coarse_factor
-                    coarse_factor = max(round(grid_space / cellsize), 1)
-
-                    # Get z values
-                    templist = templist[6:(6 + ny)]
-                    templist = [templist[i][0::coarse_factor] for i in np.arange(0, len(templist), coarse_factor)]
-                    datavals = np.array(templist).astype(float)
-                    templist.clear()
-
-                    # create xy coordinates
-                    offset = site.Origin / 1000
-                    x = cellsize * np.arange(nx)[0::coarse_factor] + xllcorner - offset.x
-                    y = cellsize * np.arange(ny)[-1::-1][0::coarse_factor] + yllcorner - offset.y
+                    x, y, datavals, cellsize, nodata_value = openDEM.openEsri(self.filename)
 
                     if self.Boundary:
                         inc_x = self.Boundary.Shape.BoundBox.XLength * 0.05
@@ -635,64 +607,11 @@ class _ImportPointsTaskPanel:
                                 for i in range(nx):
                                     pts.append(FreeCAD.Vector(x[i], y[j], datavals[j][i]) * 1000)
 
-
-                    PointObject.addPoints(pts)
-                    PointGroup.Points = PointObject
-                    pts.clear()
-
                 elif extension.lower() == ".csv" or extension.lower() == ".txt":  # x, y, z from gps
-                    import csv
-                    import numpy as np
-                    import matplotlib.mlab as ml
+                    pts = openDEM.interpolatePoints(openDEM.openCSV(self.filename))
 
-                    import scipy as sp
-                    import scipy.interpolate
-
-                    x=[]
-                    y=[]
-                    z=[]
-                    # todo: dar la opción de qué delimitador usar
-                    delim = ';' if extension.lower() == "csv" else ' '
-                    with open(self.filename, newline='') as csvfile:
-                        spamreader = csv.reader(csvfile, delimiter = delim,
-                                                skipinitialspace=True)
-                        for row in spamreader:
-                            x.append(float(row[1]))
-                            y.append(float(row[2]))
-                            z.append(float(row[3]))
-
-                    #prueba:
-                    pts = []
-                    for i, point in enumerate(x):
-                        pts.append(FreeCAD.Vector(x[i] * 1000, y[i] * 1000, z[i] * 1000))
-
-                    PointObject.addPoints(pts)
-                    PointGroup.Points = PointObject
-                    return
-
-
-                    x = np.array(x)
-                    y = np.array(y)
-                    z = np.array(z)
-                    spline = sp.interpolate.Rbf(x, y, z, function='thin-plate')
-
-                    xi = np.linspace(min(x), max(x), int((min(x) + max(x)) / 10000))
-                    yi = np.linspace(min(y), max(y), int((min(y) + max(y)) / 10000))
-                    X, Y = np.meshgrid(xi, yi)
-                    Z = spline(X, Y)
-
-                    xx = X.flatten()
-                    yy = Y.flatten()
-                    zz = Z.flatten()
-
-                    i = 0
-                    pts = []
-                    for point in xx:
-                        pts.append(FreeCAD.Vector(xx[i] * 1000, yy[i] * 1000, zz[i] * 1000))
-                        i += 1
-
-                    PointObject.addPoints(pts)
-                    PointGroup.Points = PointObject
+        PointObject.addPoints(pts)
+        PointGroup.Points = PointObject
 
         FreeCAD.ActiveDocument.recompute()
         FreeCADGui.Control.closeDialog()

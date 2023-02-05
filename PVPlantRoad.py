@@ -91,7 +91,7 @@ class _Road(ArchComponent.Component):
         'App::PropertyUUID',
         'App::PropertyFont',
         'App::PropertyStringList',
-        'App::PropertyLink',
+        'p::PropertyLink',
         'App::PropertyLinkChild',
         'App::PropertyLinkGlobal',
         'App::PropertyLinkHidden',

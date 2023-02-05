@@ -55,8 +55,7 @@ from PVPlantResources import DirDocuments as DirDocuments
 import openpyxl
 from openpyxl.styles import Alignment, Border, Side, PatternFill, GradientFill, Font
 
-
-def alpha_shape(points, alpha):
+def alpha_shape1(points, alpha):
     """
     Compute the alpha shape (concave hull) of a set
     of points.
@@ -89,77 +88,70 @@ def alpha_shape(points, alpha):
     triangles = list(polygonize(m))
     return cascaded_union(triangles), edge_points
 
-
 def makeBOQElectrical():
     ''' create a excel '''
-
-    # export layout to Excel:
-
-    # V0:
-    import PVPlantPlacement
-
-    sel = FreeCADGui.Selection.getSelection()
-    MaxY = max(sel, key=lambda obj: obj.Placement.Base.y)
-    MinY = min(sel, key=lambda obj: obj.Placement.Base.y)
-    MaxX = max(sel, key=lambda obj: obj.Placement.Base.x)
-    MinX = max(sel, key=lambda obj: obj.Placement.Base.x)
-
-    cols = PVPlantPlacement.getCols(sel)
-    for col in cols:
-        for group in col:
-            for frame in group:
-                ''''''
-
-
-    return
-
-    ''' tmp: probar a exportar a excel - hacer el layout en excel'''
-    print(" ------- Prueba de hacer layout en excel: ")
-    if FreeCADGui.Selection.hasSelection():
+    funct = 3
+    if funct == 0:
+        # export layout to Excel:
+        # V0:
+        import PVPlantPlacement
         sel = FreeCADGui.Selection.getSelection()
-        MaxY = max(sel, key=lambda p: p.Placement.Base.y).Placement.Base.y
-        MinY = min(sel, key=lambda p: p.Placement.Base.y).Placement.Base.y
-        MaxX = max(sel, key=lambda p: p.Placement.Base.x).Placement.Base.x
-        MinX = max(sel, key=lambda p: p.Placement.Base.x).Placement.Base.x
+        MaxY = max(sel, key=lambda obj: obj.Placement.Base.y)
+        MinY = min(sel, key=lambda obj: obj.Placement.Base.y)
+        MaxX = max(sel, key=lambda obj: obj.Placement.Base.x)
+        MinX = max(sel, key=lambda obj: obj.Placement.Base.x)
 
+        cols = PVPlantPlacement.getCols(sel)
+        for col in cols:
+            for group in col:
+                for frame in group:
+                    ''''''
+    elif funct == 1:
+        ''' tmp: probar a exportar a excel - hacer el layout en excel'''
+        print(" ------- Prueba de hacer layout en excel: ")
+        if FreeCADGui.Selection.hasSelection():
+            sel = FreeCADGui.Selection.getSelection()
+            MaxY = max(sel, key=lambda p: p.Placement.Base.y).Placement.Base.y
+            MinY = min(sel, key=lambda p: p.Placement.Base.y).Placement.Base.y
+            MaxX = max(sel, key=lambda p: p.Placement.Base.x).Placement.Base.x
+            MinX = max(sel, key=lambda p: p.Placement.Base.x).Placement.Base.x
 
-    return
+    else:
+        print(" ------- Prueba dibujar contorno de los objetos seleccionados:  ")
+        from scipy.spatial import ConvexHull
+        from scipy.spatial import Delaunay
+        import numpy as np
 
-    print(" ------- Prueba dibujar contorno de los objetos seleccionados:  ")
-    from scipy.spatial import ConvexHull
-    from scipy.spatial import Delaunay
-    import numpy as np
+        # contorno:
+        maxdist = 5000
+        if FreeCADGui.Selection.hasSelection():
+            sel = FreeCADGui.Selection.getSelection()
+            pts = []
+            for obj in sel:
+                if True:
+                    for vert in obj.Shape.SubShapes[0].Vertexes:
+                        point = vert.Point
+                        pts.append(point)
+                else:
+                    for ed in obj.Shape.Edges:
+                        pts.extend(ed.discretize(Distance = maxdist))
 
-    # contorno:
-    maxdist = 5000
-    if FreeCADGui.Selection.hasSelection():
-        sel = FreeCADGui.Selection.getSelection()
-        pts = []
-        for obj in sel:
-            if False:
-                for vert in obj.Shape.Vertexes:
-                    point = vert.Point
-                    pts.append(point)
-            else:
-                for ed in obj.Shape.Edges:
-                    pts.extend(ed.discretize(Distance = maxdist))
-
-        tmp = np.array(pts)
-        hull = ConvexHull(tmp[:, :2])
-
-        pts = []
-        for ver in hull.vertices:
-            point = tmp[ver]
-            pts.append(FreeCAD.Vector(point[0], point[1], 0))
-        Draft.makeWire(pts)
-
-        alpha = alpha_shape(tmp, 10000)
-        pts = []
-        for edge in alpha:
-            for ver in edge:
+            tmp = np.array(pts)
+            '''
+            hull = ConvexHull(tmp[:, :2])
+            pts.clear()
+            for ver in hull.vertices:
                 point = tmp[ver]
-                pts.append(FreeCAD.Vector(point[0], point[1]))
-        Draft.makeWire(pts)
+                pts.append(FreeCAD.Vector(point[0], point[1], 0))
+            Draft.makeWire(pts)
+            '''
+            alpha = alpha_shape1(tmp, 10000)
+            pts = []
+            for edge in alpha:
+                for ver in edge:
+                    point = tmp[ver]
+                    pts.append(FreeCAD.Vector(point[0], point[1]))
+            Draft.makeWire(pts)
 
 from scipy.spatial import Delaunay
 import numpy as np
@@ -167,8 +159,6 @@ import numpy as np
 # https://stackoverflow.com/questions/23073170/calculate-bounding-polygon-of-alpha-shape-from-the-delaunay-triangulation
 '''Alpha shapes is defined as a delaunay triangulation without edges exceeding alpha. First of remove all interior 
 triangles and then all edges exceeding alpha.'''
-
-
 def alpha_shape(points, alpha, only_outer=True):
     """
     Compute the alpha shape (concave hull) of a set of points.
@@ -216,7 +206,7 @@ def alpha_shape(points, alpha, only_outer=True):
     edges = set()
     # Loop over triangles:
     # ia, ib, ic = indices of corner points of the triangle
-    if False:
+    if True:
         for ia, ib, ic in tri.simplices:
             pa = points[ia]
             pb = points[ib]
@@ -258,11 +248,6 @@ def alpha_shape(points, alpha, only_outer=True):
 >>> for simplex in hull.simplices:
 >>>     plt.plot(points[simplex,0], points[simplex,1], 'k-')
 '''
-
-
-
-
-
 
 
 class _CommandBOQElectrical:

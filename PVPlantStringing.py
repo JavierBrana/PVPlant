@@ -320,7 +320,6 @@ class _StringSetupPanel:
                         self.frame.ViewObject.DiffuseColor = self.colorlist
                         break
 
-
         self.calculateModules()
 
     def calculateModules(self):

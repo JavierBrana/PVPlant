@@ -45,6 +45,7 @@ class PVPlantWorkbench (Workbench):
             PVPlantPad, PVPlantRoad, PVPlantTerrain, PVPlantArea, PVPlantManhole, \
             exportPVSyst, PVPlantBOQMechanical, PVPlantBOQElectrical, PVPlantBOQCivil,\
             GraphProfile, Utils.PVPlantTrace,\
+            exportDXF, importDXF, \
             reload
 
         # A list of command names created in the line above
@@ -84,6 +85,7 @@ class PVPlantWorkbench (Workbench):
                       "BOQMechanical",
                       "BOQElectrical",
                       "exportDXF",
+                      "importDXF",
                       "ExportToPVSyst",
                     ]
 
@@ -148,12 +150,20 @@ class PVPlantWorkbench (Workbench):
         self.appendMenu([QT_TRANSLATE_NOOP("arch", "&Draft"), QT_TRANSLATE_NOOP("arch", "Utilities")], self.draftutils + self.draftcontexttools)
         self.appendMenu([QT_TRANSLATE_NOOP("arch", "&Draft"), QT_TRANSLATE_NOOP("arch", "Snapping")], self.snapList)
 
+        self.observer = None
+
     def Activated(self):
         "This function is executed when the workbench is activated"
+        import SelectionObserver
+        import FreeCADGui
+
+        self.observer = SelectionObserver.SelObserver()
+        FreeCADGui.Selection.addObserver(self.observer)  # installe la fonction en mode resident
         return
 
     def Deactivated(self):
         "This function is executed when the workbench is deactivated"
+        FreeCADGui.Selection.removeObserver(self.observer)
         return
 
     def ContextMenu(self, recipient):
@@ -197,5 +207,6 @@ class PVPlantWorkbench (Workbench):
     def GetClassName(self): 
         # this function is mandatory if this is a full python workbench
         return "Gui::PythonWorkbench"
+
 
 Gui.addWorkbench(PVPlantWorkbench())

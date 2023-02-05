@@ -134,12 +134,12 @@ def makePVPlantSite():
 
     group = createGroup(obj, "CivilGroup")
     group1 = createGroup(group, "Areas")
-    createGroup(group1, "Boundary")
-    createGroup(group1, "Offset")
-    createGroup(group1, "Exclusion")
-    createGroup(group, "Drain")
+    createGroup(group1, "Boundaries")
+    createGroup(group1, "Offsets")
+    createGroup(group1, "Exclusions")
+    createGroup(group, "Drains")
     createGroup(group, "Earthworks")
-    createGroup(group, "Fence")
+    createGroup(group, "Fences")
     createGroup(group, "Foundations")
     createGroup(group, "Pads")
     createGroup(group, "Points")
@@ -155,7 +155,7 @@ def makePVPlantSite():
     createGroup(group1, "StringsBoxes")
 
     group = createGroup(obj, "MechanicalGroup")
-    createGroup(group, "FramesSetup")
+    createGroup(group, "FramesSetups")
     createGroup(group, "Frames")
 
     return obj

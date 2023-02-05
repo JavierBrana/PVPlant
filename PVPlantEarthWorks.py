@@ -311,6 +311,14 @@ class _EarthWorksTaskPanel:
 
         def makeSolidTerrain(pol):
             import BOPTools.SplitAPI as splitter
+
+            if not pol.isClosed:
+                pts = [ver.Point for ver in pol.Vertexes]
+                pts.append(pts[0])
+                pol = Part.makePolygon(pts)
+            if pol.Area == 0:
+                pol = Part.Face(pol)
+
             ext = pol.extrude(FreeCAD.Vector(0, 0, terrain.BoundBox.ZMax + 1000))
             sp = splitter.slice(ext, [terrain, ], "Split")
             return sp.childShapes()[0]
@@ -343,14 +351,18 @@ class _EarthWorksTaskPanel:
 
         # 1. step: create a solid terrain:
         #if terrain.isDerivedFrom("Part::TopoShape"): # if it is a shell
-        results = ThreadPool(cpu_count() - 1).imap_unordered(makeSolidTerrain, FreeCAD.ActiveDocument.Fusion.Shape.childShapes())
-        tmp = []
+        tmp = [obj.Base.Shape.Wires[0] for obj in FreeCAD.ActiveDocument.Fence.Group]
+        results = ThreadPool(cpu_count() - 1).imap_unordered(makeSolidTerrain, tmp)
+        #tmp = []
+        terrain = Part.makeCompound()
         for result in results:
             #FreeCAD.Console.PrintWarning(result)
-            tmp.append(result)
-        terrain = Part.makeCompound(tmp)
-        #Part.show(terrain, "t3d")
+            #tmp.append(result)
+            terrain.add(result)
+        #terrain = Part.makeCompound(tmp)
+        Part.show(terrain, "t3d")
         print(" -- Generación de terreno:", datetime.now() - starttime)
+        return
         # 2. step: calculate earthworks:
         sel = sorted(sel, key=lambda k: k.Shape.Vertexes[0].Point.x, reverse=False)
         height = 10000

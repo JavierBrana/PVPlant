@@ -164,7 +164,83 @@ class _TaskPanel:
     def reject(self):
         FreeCADGui.Control.closeDialog()
 
-def Triangulate(Points, MaxlengthLE = 8000, MaxAngleLE = math.pi/2):
+
+
+#----------------------------------------------------------------------------------------------
+#from PySide.QtWidgets import QVBoxLayout, QLabel, QPushButton, QWidget, QMainWindow, QApplication
+from PySide.QtCore import QTimer, QRunnable, Slot, Signal, QObject, QThreadPool
+
+import sys
+import time
+import traceback
+
+
+class WorkerSignals(QObject):
+    '''
+    Defines the signals available from a running worker thread.
+    Supported signals are:
+    - finished: No data
+    - error: tuple (exctype, value, traceback.format_exc() )
+    - result: object data returned from processing, anything
+    - progress: int indicating % progress
+
+    '''
+    finished = Signal()
+    error = Signal(tuple)
+    result = Signal(object)
+    progress = Signal(int)
+
+class Worker(QRunnable):
+    '''
+    Worker thread
+    Inherits from QRunnable to handler worker thread setup, signals and wrap-up.
+    - param callback: The function callback to run on this worker thread. Supplied args and
+                      kwargs will be passed through to the runner.
+    - type callback: function
+    - param args: Arguments to pass to the callback function
+    - param kwargs: Keywords to pass to the callback function
+    '''
+
+    def __init__(self, fn, *args, **kwargs):
+        super(Worker, self).__init__()
+
+        # Store constructor arguments (re-used for processing)
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+
+        # Add the callback to our kwargs
+        self.kwargs['progress_callback'] = self.signals.progress
+
+    @Slot()
+    def run(self):
+        '''
+        Initialise the runner function with passed args, kwargs.
+        '''
+
+        # Retrieve args/kwargs here; and fire processing using them
+        try:
+            result = self.fn(*self.args, **self.kwargs)
+        except:
+            traceback.print_exc()
+            exctype, value = sys.exc_info()[:2]
+            self.signals.error.emit((exctype, value, traceback.format_exc()))
+        else:
+            self.signals.result.emit(result)  # Return the result of the processing
+        finally:
+            self.signals.finished.emit()  # Done
+#--------------------------------------------------------------------------------------------
+def projectShapeOnMesh(shape, mesh):
+    import MeshPart as mp
+    tmp = mp.projectShapeOnMesh(shape, mesh, FreeCAD.Vector(0,0,1))
+    pts = list()
+    for points in tmp:
+        pts.extend(points)
+    res = [i for n, i in enumerate(pts) if i not in pts[:n]]
+    return res
+
+def Triangulate(Points, MaxlengthLE = 8000, MaxAngleLE = math.pi / 2):
     import numpy as np
     from scipy.spatial import Delaunay
     from stl import mesh as stlmesh
@@ -181,9 +257,9 @@ def Triangulate(Points, MaxlengthLE = 8000, MaxAngleLE = math.pi/2):
                 wireframe.vectors[i][j] = Points[f[j], :]
 
     MeshObject = Mesh.Mesh(wireframe.vectors.tolist())
-    MeshObject.harmonizeNormals()
     if len(MeshObject.Facets) == 0:
         return None
+    MeshObject.harmonizeNormals()
     if MeshObject.Facets[0].Normal.z < 0:
         MeshObject.flipNormals()
     return MeshObject
@@ -192,7 +268,6 @@ def MaxLength(P1, P2, P3, MaxlengthLE):
     """
     Calculation of the 2D length between triangle edges
     """
-
     p1 = FreeCAD.Vector(P1[0], P1[1], 0)
     p2 = FreeCAD.Vector(P2[0], P2[1], 0)
     p3 = FreeCAD.Vector(P3[0], P3[1], 0)
@@ -202,18 +277,15 @@ def MaxLength(P1, P2, P3, MaxlengthLE):
         vec = i.sub(j)
         if vec.Length > MaxlengthLE:
             return False
-
     return True
 
 def MaxAngle(P1, P2, P3, MaxAngleLE):
     """
     Calculation of the 2D angle between triangle edges
     """
-
     p1 = FreeCAD.Vector(P1[0], P1[1], 0)
     p2 = FreeCAD.Vector(P2[0], P2[1], 0)
     p3 = FreeCAD.Vector(P3[0], P3[1], 0)
-
     List = [[p1, p2, p3], [p2, p3, p1], [p3, p1, p2]]
     for j, k, l in List:
         vec1 = j.sub(k)
@@ -221,8 +293,36 @@ def MaxAngle(P1, P2, P3, MaxAngleLE):
         radian = vec1.getAngle(vec2)
         if radian > MaxAngleLE:
             return False
-
     return True
+
+def Open3DTriangle(point_cloud):
+    import numpy as np
+    import open3d as o3d
+
+    '''
+    input_path = "your_path_to_file/"
+    output_path = "your_path_to_output_folder/"
+    dataname = "sample.xyz"
+    point_cloud = np.loadtxt(input_path + dataname, skiprows=1)
+    '''
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(point_cloud)
+
+    pcd.normals = o3d.utility.Vector3dVector(np.zeros((1, 3)))
+    pcd.estimate_normals()
+    pcd.orient_normals_consistent_tangent_plane(100)
+
+    mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd,
+                                                                             depth=8,
+                                                                             width=0,
+                                                                             scale=1.1,
+                                                                             linear_fit=False,
+                                                                             n_threads=8)
+    o3d.visualization.draw_geometries([mesh])
+    #bbox = pcd.get_axis_aligned_bounding_box()
+    #p_mesh_crop = mesh.crop(bbox)
+    return mesh
+
 
 def MeshToShape(mesh):
     import Part
@@ -232,6 +332,7 @@ def MeshToShape(mesh):
     shape.makeShapeFromMesh(meshcopy.Topology, 0.1)
     shape.Placement = mesh.Placement
     return shape
+
 
 class _PVPlantCreateTerrainMesh:
 
