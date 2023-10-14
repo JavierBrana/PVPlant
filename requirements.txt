@@ -1,0 +1,7 @@
+numpy~=1.25.1
+opencv-python~=4.7.0
+matplotlib~=3.7.2
+ezdxf~=1.0.3
+openpyxl~=3.1.2
+utm~=0.7.0
+PySide2~=5.15.8
